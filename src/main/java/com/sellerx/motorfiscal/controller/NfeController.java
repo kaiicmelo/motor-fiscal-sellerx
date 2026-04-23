@@ -21,6 +21,8 @@ import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetornoDados;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteIndicadorProcessamento;
 import com.fincatto.documentofiscal.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
+import java.time.ZonedDateTime;
+import java.util.Random;
 
 @RestController
 @RequestMapping("/api/nfe")
@@ -93,7 +95,7 @@ public class NfeController {
 
             switch (action) {
                 case "emitir":
-                    result = handleEmitir(payload, wsFacade);
+                    result = handleEmitir(payload, wsFacade, config);
                     break;
                 case "cancelar":
                     result = handleCancelar(payload, wsFacade);
@@ -124,10 +126,31 @@ public class NfeController {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> handleEmitir(Map<String, Object> payload, WSFacade wsFacade) throws Exception {
+    private Map<String, Object> handleEmitir(Map<String, Object> payload, WSFacade wsFacade, NFeConfig config) throws Exception {
         NFNota nota = new NFNota();
         NFNotaInfo info = new NFNotaInfo();
+        
+        // --- Iniciando o mapeamento real da Nota (Bloco IDE) ---
+        NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
+        ide.setUf(config.getCUF());
+        ide.setAmbiente(config.getAmbiente());
+        ide.setModelo(DFModelo.NFE);
+        
+        // O Fincatto exige um código randômico para compor a chave de acesso da nota
+        ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
+        
+        // Extraindo os dados do objeto "invoice" que vem do seu SellerX (com fallbacks de segurança)
+        Map<String, Object> invoiceData = payload.containsKey("invoice") ? (Map<String, Object>) payload.get("invoice") : new HashMap<>();
+        
+        ide.setNaturezaOperacao((String) invoiceData.getOrDefault("natureza_operacao", "VENDA DE MERCADORIA"));
+        ide.setSerie(invoiceData.containsKey("serie") ? invoiceData.get("serie").toString() : "1");
+        ide.setNumeroNota(invoiceData.containsKey("numero") ? invoiceData.get("numero").toString() : "1");
+        ide.setDataHoraEmissao(ZonedDateTime.now());
+        
+        // Atribui o bloco de identificação à nota
+        info.setIdentificacao(ide);
         nota.setInfo(info);
+        // --------------------------------------------------------
         
         NFLoteEnvio lote = new NFLoteEnvio();
         lote.setNotas(Collections.singletonList(nota));
@@ -135,11 +158,13 @@ public class NfeController {
         lote.setVersao("4.00");
         lote.setIndicadorProcessamento(NFLoteIndicadorProcessamento.PROCESSAMENTO_ASSINCRONO);
         
-        // CORREÇÃO: Agora extraímos o Retorno de dentro do objeto Dados
         NFLoteEnvioRetornoDados dados = wsFacade.enviaLote(lote);
         NFLoteEnvioRetorno retorno = dados.getRetorno();
         
-        return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
+        return Map.of(
+            "status", retorno.getStatus() != null ? retorno.getStatus() : "erro", 
+            "motivo", retorno.getMotivo() != null ? retorno.getMotivo() : "Motivo não retornado pela Sefaz"
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -149,7 +174,8 @@ public class NfeController {
 
     private Map<String, Object> handleConsultarStatus(Map<String, Object> payload, WSFacade wsFacade, DFUnidadeFederativa uf) throws Exception {
         NFStatusServicoConsultaRetorno retorno = wsFacade.consultaStatus(uf, DFModelo.NFE);
-        return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
+        return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro", "motivo", retorno.getMotivo());
     }
 }
-// Sync: 2026-04-23T18:29:10.270Z
+
+// Sync: 2026-04-23T18:44:17.519Z
