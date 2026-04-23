@@ -18,6 +18,7 @@ import java.util.Collections;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvio;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
+import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetornoDados;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteIndicadorProcessamento;
 import com.fincatto.documentofiscal.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
 
@@ -57,7 +58,6 @@ public class NfeController {
 
             byte[] pfxBytes = downloadCertificado(certUri);
             
-            // O KeyStore agora é instanciado antes para ser injetado dentro da NFeConfig
             KeyStore ks = KeyStore.getInstance("PKCS12");
             ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
 
@@ -89,8 +89,6 @@ public class NfeController {
             };
 
             Map<String, Object> result = new HashMap<>();
-            
-            // Na versão 5.0+, o WSFacade recebe apenas o config, pois o keystore agora vem de dentro dele
             WSFacade wsFacade = new WSFacade(config); 
 
             switch (action) {
@@ -131,14 +129,16 @@ public class NfeController {
         NFNotaInfo info = new NFNotaInfo();
         nota.setInfo(info);
         
-        // Versão 5+ exige o envio de um lote estruturado, não a nota solta
         NFLoteEnvio lote = new NFLoteEnvio();
         lote.setNotas(Collections.singletonList(nota));
         lote.setIdLote("1");
         lote.setVersao("4.00");
         lote.setIndicadorProcessamento(NFLoteIndicadorProcessamento.PROCESSAMENTO_ASSINCRONO);
         
-        NFLoteEnvioRetorno retorno = wsFacade.enviaLote(lote);
+        // CORREÇÃO: Agora extraímos o Retorno de dentro do objeto Dados
+        NFLoteEnvioRetornoDados dados = wsFacade.enviaLote(lote);
+        NFLoteEnvioRetorno retorno = dados.getRetorno();
+        
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 
@@ -148,9 +148,8 @@ public class NfeController {
     }
 
     private Map<String, Object> handleConsultarStatus(Map<String, Object> payload, WSFacade wsFacade, DFUnidadeFederativa uf) throws Exception {
-        // Versão 5+ exige passar o modelo (NFE ou NFCE) junto com a UF
         NFStatusServicoConsultaRetorno retorno = wsFacade.consultaStatus(uf, DFModelo.NFE);
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T18:10:29.315Z
+// Sync: 2026-04-23T18:25:14.434Z
