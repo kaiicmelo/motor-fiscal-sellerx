@@ -23,9 +23,8 @@
         <dependency>
             <groupId>com.github.wmixvideo</groupId>
             <artifactId>nfe</artifactId>
-            <version>4.0.5</version>
+            <version>5.0.48</version>
         </dependency>
-        <!-- JAXB obrigatório para Java 11+ (evita falha na inicialização do contexto do app) -->
         <dependency>
             <groupId>javax.xml.bind</groupId>
             <artifactId>jaxb-api</artifactId>
@@ -52,4 +51,4 @@
         </repository>
     </repositories>
 </project>
-<!-- Sync: 2026-04-23T17:29:12.749Z -->
+<!-- Sync: 2026-04-23T17:49:51.660Z -->
