@@ -4,12 +4,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.fincatto.documentofiscal.nfe.WSFacade;
 import com.fincatto.documentofiscal.nfe.NFeConfig;
-import com.fincatto.documentofiscal.nfe.classes.nota.NFNota;
-import com.fincatto.documentofiscal.nfe.classes.lote.envio.NFLoteEnvioRetorno;
-import com.fincatto.documentofiscal.nfe.classes.evento.NFEnviaEventoRetorno;
-import com.fincatto.documentofiscal.nfe.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
-import com.fincatto.documentofiscal.nfe.classes.cadastro.NFRetornoConsultaCadastro;
-import com.fincatto.documentofiscal.nfe.classes.nota.consulta.NFNotaConsultaRetorno;
 import com.fincatto.documentofiscal.DFAmbiente;
 import com.fincatto.documentofiscal.DFUnidadeFederativa;
 import java.io.InputStream;
@@ -19,24 +13,34 @@ import java.net.URLConnection;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
 import com.fincatto.documentofiscal.nfe.classes.nota.*;
-import java.math.BigDecimal;
-import java.util.ArrayList;
+import com.fincatto.documentofiscal.nfe.classes.lote.envio.NFLoteEnvioRetorno;
+import com.fincatto.documentofiscal.nfe.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
 
 @RestController
 @RequestMapping("/api/nfe")
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 public class NfeController {
 
-    @PostMapping("/process")
-    public ResponseEntity<Map<String, Object>> processAction(@RequestBody Map<String, Object> payload) {
+    @RequestMapping(value = "/process", method = {RequestMethod.POST, RequestMethod.GET, RequestMethod.OPTIONS})
+    public ResponseEntity<Map<String, Object>> processAction(@RequestBody(required = false) Map<String, Object> payload) {
         try {
+            // Previne 400 Bad Request automático se a chamada vier sem body (ex: requisição GET/OPTIONS no navegador)
+            if (payload == null || payload.isEmpty()) {
+                return ResponseEntity.ok(Map.of("status", "online", "message", "Motor Fiscal rodando e mapeado corretamente na rota /api/nfe/process"));
+            }
+
             String action = (String) payload.get("action");
+            
+            // Healthcheck do App SellerX
+            if ("ping_test".equals(action)) {
+                return ResponseEntity.ok(Map.of("status", "online", "message", "Ping test concluído. A rota existe e responde perfeitamente."));
+            }
             
             @SuppressWarnings("unchecked")
             Map<String, Object> company = (Map<String, Object>) payload.get("company");
             
-            if (action == null || company == null) {
+            if (action == null || company == null || company.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Atributos 'action' ou 'company' ausentes no payload."));
             }
 
@@ -120,7 +124,6 @@ public class NfeController {
         NFNota nota = new NFNota();
         NFNotaInfo info = new NFNotaInfo();
         nota.setInfo(info);
-        // Implementação resumida para deploy automático
         NFLoteEnvioRetorno retorno = wsFacade.enviaLote(nota);
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
@@ -135,4 +138,4 @@ public class NfeController {
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T16:24:04.134Z
+// Sync: 2026-04-23T16:38:40.272Z
