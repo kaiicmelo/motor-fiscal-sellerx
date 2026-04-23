@@ -25,6 +25,17 @@
             <artifactId>nfe</artifactId>
             <version>3.0.40</version>
         </dependency>
+        <!-- JAXB obrigatório para Java 11+ (evita falha na inicialização do contexto do app) -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>2.3.1</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -41,4 +52,4 @@
         </repository>
     </repositories>
 </project>
-<!-- Sync: 2026-04-23T16:24:04.134Z -->
+<!-- Sync: 2026-04-23T16:38:40.272Z -->
