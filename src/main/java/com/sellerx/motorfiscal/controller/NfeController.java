@@ -11,6 +11,7 @@ import java.io.ByteArrayInputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.util.Map;
 import java.util.HashMap;
 import com.fincatto.documentofiscal.nfe.classes.nota.*;
@@ -65,18 +66,26 @@ public class NfeController {
                     return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
                 }
                 @Override
-                public KeyStore getCertificadoKeyStore() throws Exception {
-                    KeyStore ks = KeyStore.getInstance("PKCS12");
-                    ks.load(new ByteArrayInputStream(pfxBytes), getCertificadoSenha().toCharArray());
-                    return ks;
+                public KeyStore getCertificadoKeyStore() throws KeyStoreException {
+                    try {
+                        KeyStore ks = KeyStore.getInstance("PKCS12");
+                        ks.load(new ByteArrayInputStream(pfxBytes), getCertificadoSenha().toCharArray());
+                        return ks;
+                    } catch (Exception e) {
+                        throw new KeyStoreException("Erro ao carregar o certificado", e);
+                    }
                 }
                 @Override
                 public String getCertificadoSenha() {
                     return certPass;
                 }
                 @Override
-                public KeyStore getCadeiaCertificadosKeyStore() throws Exception {
-                    return KeyStore.getInstance("JKS"); 
+                public KeyStore getCadeiaCertificadosKeyStore() throws KeyStoreException {
+                    try {
+                        return KeyStore.getInstance("JKS"); 
+                    } catch (Exception e) {
+                        throw new KeyStoreException("Erro ao carregar a cadeia de certificados", e);
+                    }
                 }
                 @Override
                 public String getCadeiaCertificadosSenha() {
@@ -138,4 +147,4 @@ public class NfeController {
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T16:44:31.958Z
+// Sync: 2026-04-23T17:06:42.173Z
