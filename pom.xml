@@ -23,7 +23,7 @@
         <dependency>
             <groupId>com.github.wmixvideo</groupId>
             <artifactId>nfe</artifactId>
-            <version>3.0.40</version>
+            <version>4.0.5</version>
         </dependency>
         <!-- JAXB obrigatório para Java 11+ (evita falha na inicialização do contexto do app) -->
         <dependency>
@@ -52,4 +52,4 @@
         </repository>
     </repositories>
 </project>
-<!-- Sync: 2026-04-23T16:44:31.958Z -->
+<!-- Sync: 2026-04-23T17:06:42.173Z -->
