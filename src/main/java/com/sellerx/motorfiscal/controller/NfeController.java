@@ -2,21 +2,20 @@ package com.sellerx.motorfiscal.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.fincatto.documentofiscal.nfe.WSFacade;
-import com.fincatto.documentofiscal.nfe.NFeConfig;
-import com.fincatto.documentofiscal.DFAmbiente;
-import com.fincatto.documentofiscal.DFUnidadeFederativa;
+import com.fincatto.nfe400.webservices.WSFacade;
+import com.fincatto.nfe.NFeConfig;
+import com.fincatto.nfe.DFAmbiente;
+import com.fincatto.nfe.DFUnidadeFederativa;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
 import java.util.Map;
 import java.util.HashMap;
-import com.fincatto.documentofiscal.nfe.classes.nota.*;
-import com.fincatto.documentofiscal.nfe.classes.lote.envio.NFLoteEnvioRetorno;
-import com.fincatto.documentofiscal.nfe.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
+import com.fincatto.nfe400.classes.nota.*;
+import com.fincatto.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
+import com.fincatto.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
 
 @RestController
 @RequestMapping("/api/nfe")
@@ -66,13 +65,13 @@ public class NfeController {
                     return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
                 }
                 @Override
-                public KeyStore getCertificadoKeyStore() throws KeyStoreException {
+                public KeyStore getCertificadoKeyStore() {
                     try {
                         KeyStore ks = KeyStore.getInstance("PKCS12");
                         ks.load(new ByteArrayInputStream(pfxBytes), getCertificadoSenha().toCharArray());
                         return ks;
                     } catch (Exception e) {
-                        throw new KeyStoreException("Erro ao carregar o certificado", e);
+                        throw new RuntimeException("Erro ao carregar o certificado", e);
                     }
                 }
                 @Override
@@ -80,11 +79,11 @@ public class NfeController {
                     return certPass;
                 }
                 @Override
-                public KeyStore getCadeiaCertificadosKeyStore() throws KeyStoreException {
+                public KeyStore getCadeiaCertificadosKeyStore() {
                     try {
                         return KeyStore.getInstance("JKS"); 
                     } catch (Exception e) {
-                        throw new KeyStoreException("Erro ao carregar a cadeia de certificados", e);
+                        throw new RuntimeException("Erro ao carregar a cadeia de certificados", e);
                     }
                 }
                 @Override
@@ -147,4 +146,4 @@ public class NfeController {
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T17:06:42.173Z
+// Sync: 2026-04-23T17:29:12.749Z
