@@ -9,4 +9,4 @@ public class MotorFiscalApplication {
         SpringApplication.run(MotorFiscalApplication.class, args);
     }
 }
-// Sync: 2026-04-23T18:25:14.434Z
+// Sync: 2026-04-23T18:29:10.270Z
