@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.nfe400.classes.CRT;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvio;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetornoDados;
@@ -32,13 +33,11 @@ import java.util.Random;
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 public class NfeController {
 
-    // CRIANDO A FILA: Um único "trabalhador" processará as notas uma a uma, em ordem de chegada.
     private final ExecutorService filaDeProcessamento = Executors.newSingleThreadExecutor();
 
     @RequestMapping(value = "/process", method = {RequestMethod.POST, RequestMethod.GET, RequestMethod.OPTIONS})
     public CompletableFuture<ResponseEntity<Map<String, Object>>> processAction(@RequestBody(required = false) Map<String, Object> payload) {
         
-        // Coloca a requisição na fila e libera a thread do servidor web imediatamente
         return CompletableFuture.supplyAsync(() -> {
             try {
                 if (payload == null || payload.isEmpty()) {
@@ -122,7 +121,7 @@ public class NfeController {
                 e.printStackTrace();
                 return ResponseEntity.status(500).body(Map.of("status", "error", "message", "Erro interno no Motor Fiscal: " + e.getMessage()));
             }
-        }, filaDeProcessamento); // <- O SEGREDO ESTÁ AQUI: Vinculamos a execução à fila restrita
+        }, filaDeProcessamento);
     }
 
     private byte[] downloadCertificado(String uriString) throws Exception {
@@ -140,11 +139,11 @@ public class NfeController {
         NFNota nota = new NFNota();
         NFNotaInfo info = new NFNotaInfo();
         
+        // --- Bloco IDE (Identificação) ---
         NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
         ide.setUf(config.getCUF());
         ide.setAmbiente(config.getAmbiente());
         ide.setModelo(DFModelo.NFE);
-        
         ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
         
         Map<String, Object> invoiceData = payload.containsKey("invoice") ? (Map<String, Object>) payload.get("invoice") : new HashMap<>();
@@ -153,8 +152,31 @@ public class NfeController {
         ide.setSerie(invoiceData.containsKey("serie") ? invoiceData.get("serie").toString() : "1");
         ide.setNumeroNota(invoiceData.containsKey("numero") ? invoiceData.get("numero").toString() : "1");
         ide.setDataHoraEmissao(ZonedDateTime.now());
-        
         info.setIdentificacao(ide);
+        
+        // --- Bloco Emitente (Remetente) ---
+        Map<String, Object> companyData = payload.containsKey("company") ? (Map<String, Object>) payload.get("company") : new HashMap<>();
+        
+        NFNotaInfoEmitente emitente = new NFNotaInfoEmitente();
+        emitente.setCnpj((String) companyData.getOrDefault("cnpj", "00000000000000"));
+        emitente.setRazaoSocial((String) companyData.getOrDefault("razao_social", "EMPRESA TESTE LTDA"));
+        emitente.setNomeFantasia((String) companyData.getOrDefault("nome_fantasia", "EMPRESA TESTE"));
+        emitente.setInscricaoEstadual((String) companyData.getOrDefault("inscricao_estadual", "ISENTO"));
+        emitente.setCrt(CRT.SIMPLES_NACIONAL);
+        
+        NFNotaInfoEndereco enderecoEmitente = new NFNotaInfoEndereco();
+        enderecoEmitente.setLogradouro((String) companyData.getOrDefault("logradouro", "RUA DE TESTE"));
+        enderecoEmitente.setNumero((String) companyData.getOrDefault("numero", "123"));
+        enderecoEmitente.setBairro((String) companyData.getOrDefault("bairro", "CENTRO"));
+        enderecoEmitente.setCodigoMunicipio((String) companyData.getOrDefault("codigo_municipio", "3516200")); // Código IBGE Franca/SP
+        enderecoEmitente.setDescricaoMunicipio((String) companyData.getOrDefault("municipio", "Franca"));
+        enderecoEmitente.setUf(config.getCUF());
+        enderecoEmitente.setCep((String) companyData.getOrDefault("cep", "14400000"));
+        
+        emitente.setEndereco(enderecoEmitente);
+        info.setEmitente(emitente);
+        // ----------------------------------
+        
         nota.setInfo(info);
         
         NFLoteEnvio lote = new NFLoteEnvio();
@@ -183,4 +205,4 @@ public class NfeController {
     }
 }
 
-// Sync: 2026-04-23T18:52:31.808Z
+// Sync: 2026-04-23T19:05:17.619Z
