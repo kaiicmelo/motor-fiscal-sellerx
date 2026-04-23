@@ -15,6 +15,9 @@ import java.security.KeyStore;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvio;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
@@ -29,90 +32,97 @@ import java.util.Random;
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 public class NfeController {
 
+    // CRIANDO A FILA: Um único "trabalhador" processará as notas uma a uma, em ordem de chegada.
+    private final ExecutorService filaDeProcessamento = Executors.newSingleThreadExecutor();
+
     @RequestMapping(value = "/process", method = {RequestMethod.POST, RequestMethod.GET, RequestMethod.OPTIONS})
-    public ResponseEntity<Map<String, Object>> processAction(@RequestBody(required = false) Map<String, Object> payload) {
-        try {
-            if (payload == null || payload.isEmpty()) {
-                return ResponseEntity.ok(Map.of("status", "online", "message", "Motor Fiscal rodando e mapeado corretamente na rota /api/nfe/process"));
+    public CompletableFuture<ResponseEntity<Map<String, Object>>> processAction(@RequestBody(required = false) Map<String, Object> payload) {
+        
+        // Coloca a requisição na fila e libera a thread do servidor web imediatamente
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                if (payload == null || payload.isEmpty()) {
+                    return ResponseEntity.ok(Map.of("status", "online", "message", "Motor Fiscal rodando e mapeado corretamente na rota /api/nfe/process"));
+                }
+
+                String action = (String) payload.get("action");
+                
+                if ("ping_test".equals(action)) {
+                    return ResponseEntity.ok(Map.of("status", "online", "message", "Ping test concluído. A rota existe e responde perfeitamente."));
+                }
+                
+                @SuppressWarnings("unchecked")
+                Map<String, Object> company = (Map<String, Object>) payload.get("company");
+                
+                if (action == null || company == null || company.isEmpty()) {
+                    return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Atributos 'action' ou 'company' ausentes no payload."));
+                }
+
+                String certUri = (String) company.get("certificate_file_uri");
+                String certPass = (String) company.get("certificate_password");
+                String ufString = (String) company.get("uf");
+                String ambienteStr = (String) company.getOrDefault("ambiente", "HOMOLOGACAO");
+
+                if (certUri == null || certPass == null) {
+                    return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Credenciais do certificado ausentes."));
+                }
+
+                byte[] pfxBytes = downloadCertificado(certUri);
+                
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
+
+                NFeConfig config = new NFeConfig() {
+                    @Override
+                    public DFUnidadeFederativa getCUF() {
+                        return ufString != null ? DFUnidadeFederativa.valueOfCodigo(ufString) : DFUnidadeFederativa.SP;
+                    }
+                    @Override
+                    public DFAmbiente getAmbiente() {
+                        return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
+                    }
+                    @Override
+                    public KeyStore getCertificadoKeyStore() {
+                        return ks;
+                    }
+                    @Override
+                    public String getCertificadoSenha() {
+                        return certPass;
+                    }
+                    @Override
+                    public KeyStore getCadeiaCertificadosKeyStore() {
+                        return ks; 
+                    }
+                    @Override
+                    public String getCadeiaCertificadosSenha() {
+                        return certPass;
+                    }
+                };
+
+                Map<String, Object> result = new HashMap<>();
+                WSFacade wsFacade = new WSFacade(config); 
+
+                switch (action) {
+                    case "emitir":
+                        result = handleEmitir(payload, wsFacade, config);
+                        break;
+                    case "cancelar":
+                        result = handleCancelar(payload, wsFacade);
+                        break;
+                    case "consultar_status":
+                        result = handleConsultarStatus(payload, wsFacade, config.getCUF());
+                        break;
+                    default:
+                        return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Ação não suportada pelo Motor: " + action));
+                }
+                
+                return ResponseEntity.ok(result);
+                
+            } catch (Exception e) {
+                e.printStackTrace();
+                return ResponseEntity.status(500).body(Map.of("status", "error", "message", "Erro interno no Motor Fiscal: " + e.getMessage()));
             }
-
-            String action = (String) payload.get("action");
-            
-            if ("ping_test".equals(action)) {
-                return ResponseEntity.ok(Map.of("status", "online", "message", "Ping test concluído. A rota existe e responde perfeitamente."));
-            }
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> company = (Map<String, Object>) payload.get("company");
-            
-            if (action == null || company == null || company.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Atributos 'action' ou 'company' ausentes no payload."));
-            }
-
-            String certUri = (String) company.get("certificate_file_uri");
-            String certPass = (String) company.get("certificate_password");
-            String ufString = (String) company.get("uf");
-            String ambienteStr = (String) company.getOrDefault("ambiente", "HOMOLOGACAO");
-
-            if (certUri == null || certPass == null) {
-                return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Credenciais do certificado ausentes."));
-            }
-
-            byte[] pfxBytes = downloadCertificado(certUri);
-            
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
-
-            NFeConfig config = new NFeConfig() {
-                @Override
-                public DFUnidadeFederativa getCUF() {
-                    return ufString != null ? DFUnidadeFederativa.valueOfCodigo(ufString) : DFUnidadeFederativa.SP;
-                }
-                @Override
-                public DFAmbiente getAmbiente() {
-                    return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
-                }
-                @Override
-                public KeyStore getCertificadoKeyStore() {
-                    return ks;
-                }
-                @Override
-                public String getCertificadoSenha() {
-                    return certPass;
-                }
-                @Override
-                public KeyStore getCadeiaCertificadosKeyStore() {
-                    return ks; 
-                }
-                @Override
-                public String getCadeiaCertificadosSenha() {
-                    return certPass;
-                }
-            };
-
-            Map<String, Object> result = new HashMap<>();
-            WSFacade wsFacade = new WSFacade(config); 
-
-            switch (action) {
-                case "emitir":
-                    result = handleEmitir(payload, wsFacade, config);
-                    break;
-                case "cancelar":
-                    result = handleCancelar(payload, wsFacade);
-                    break;
-                case "consultar_status":
-                    result = handleConsultarStatus(payload, wsFacade, config.getCUF());
-                    break;
-                default:
-                    return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Ação não suportada pelo Motor: " + action));
-            }
-            
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("status", "error", "message", "Erro interno no Motor Fiscal: " + e.getMessage()));
-        }
+        }, filaDeProcessamento); // <- O SEGREDO ESTÁ AQUI: Vinculamos a execução à fila restrita
     }
 
     private byte[] downloadCertificado(String uriString) throws Exception {
@@ -130,16 +140,13 @@ public class NfeController {
         NFNota nota = new NFNota();
         NFNotaInfo info = new NFNotaInfo();
         
-        // --- Iniciando o mapeamento real da Nota (Bloco IDE) ---
         NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
         ide.setUf(config.getCUF());
         ide.setAmbiente(config.getAmbiente());
         ide.setModelo(DFModelo.NFE);
         
-        // O Fincatto exige um código randômico para compor a chave de acesso da nota
         ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
         
-        // Extraindo os dados do objeto "invoice" que vem do seu SellerX (com fallbacks de segurança)
         Map<String, Object> invoiceData = payload.containsKey("invoice") ? (Map<String, Object>) payload.get("invoice") : new HashMap<>();
         
         ide.setNaturezaOperacao((String) invoiceData.getOrDefault("natureza_operacao", "VENDA DE MERCADORIA"));
@@ -147,10 +154,8 @@ public class NfeController {
         ide.setNumeroNota(invoiceData.containsKey("numero") ? invoiceData.get("numero").toString() : "1");
         ide.setDataHoraEmissao(ZonedDateTime.now());
         
-        // Atribui o bloco de identificação à nota
         info.setIdentificacao(ide);
         nota.setInfo(info);
-        // --------------------------------------------------------
         
         NFLoteEnvio lote = new NFLoteEnvio();
         lote.setNotas(Collections.singletonList(nota));
@@ -178,4 +183,4 @@ public class NfeController {
     }
 }
 
-// Sync: 2026-04-23T18:44:17.519Z
+// Sync: 2026-04-23T18:52:31.808Z
