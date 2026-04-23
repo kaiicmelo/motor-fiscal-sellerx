@@ -14,8 +14,11 @@ import java.net.URLConnection;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Collections;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvio;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
+import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteIndicadorProcessamento;
 import com.fincatto.documentofiscal.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
 
 @RestController
@@ -54,6 +57,10 @@ public class NfeController {
 
             byte[] pfxBytes = downloadCertificado(certUri);
             
+            // O KeyStore agora é instanciado antes para ser injetado dentro da NFeConfig
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
+
             NFeConfig config = new NFeConfig() {
                 @Override
                 public DFUnidadeFederativa getCUF() {
@@ -63,46 +70,28 @@ public class NfeController {
                 public DFAmbiente getAmbiente() {
                     return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
                 }
-                
                 @Override
-                public String getCertificadoCaminho() {
-                    return null; 
+                public KeyStore getCertificadoKeyStore() {
+                    return ks;
                 }
                 @Override
                 public String getCertificadoSenha() {
                     return certPass;
                 }
                 @Override
-                public String getCadeiaCertificadosCaminho() {
-                    return null; 
+                public KeyStore getCadeiaCertificadosKeyStore() {
+                    return ks; 
                 }
                 @Override
                 public String getCadeiaCertificadosSenha() {
-                    return "changeit";
+                    return certPass;
                 }
-
-                @Override public String getDfeTamanhoLote() { return "1"; }
-                @Override public String getPathCertificados() { return null; }
-                @Override public String getPathNFe() { return null; }
-                @Override public int getPortaWS() { return 443; } 
-                @Override public boolean isContingenciaSCVCM() { return false; }
-                @Override public boolean isContingenciaSCVSP() { return false; }
-                @Override public boolean isProdutorRural() { return false; }
-                @Override public String getUrlSEFAZ(DFModelo modelo) { return null; } 
-                @Override public boolean isValidaCertificadoOffLine() { return false; }
-                @Override public String getProxyHost() { return null; }
-                @Override public int getProxyPort() { return 0; }
-                @Override public String getProxyUser() { return null; }
-                @Override public String getProxyPass() { return null; }
-                @Override public String getWebServiceUF() { return ufString; } 
-                @Override public String getVersao() { return "4.00"; } 
             };
 
             Map<String, Object> result = new HashMap<>();
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
-
-            WSFacade wsFacade = new WSFacade(config, ks); 
+            
+            // Na versão 5.0+, o WSFacade recebe apenas o config, pois o keystore agora vem de dentro dele
+            WSFacade wsFacade = new WSFacade(config); 
 
             switch (action) {
                 case "emitir":
@@ -141,7 +130,15 @@ public class NfeController {
         NFNota nota = new NFNota();
         NFNotaInfo info = new NFNotaInfo();
         nota.setInfo(info);
-        NFLoteEnvioRetorno retorno = wsFacade.enviaLote(nota);
+        
+        // Versão 5+ exige o envio de um lote estruturado, não a nota solta
+        NFLoteEnvio lote = new NFLoteEnvio();
+        lote.setNotas(Collections.singletonList(nota));
+        lote.setIdLote("1");
+        lote.setVersao("4.00");
+        lote.setIndicadorProcessamento(NFLoteIndicadorProcessamento.PROCESSAMENTO_ASSINCRONO);
+        
+        NFLoteEnvioRetorno retorno = wsFacade.enviaLote(lote);
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 
@@ -151,8 +148,9 @@ public class NfeController {
     }
 
     private Map<String, Object> handleConsultarStatus(Map<String, Object> payload, WSFacade wsFacade, DFUnidadeFederativa uf) throws Exception {
-        NFStatusServicoConsultaRetorno retorno = wsFacade.consultaStatus(uf);
+        // Versão 5+ exige passar o modelo (NFE ou NFCE) junto com a UF
+        NFStatusServicoConsultaRetorno retorno = wsFacade.consultaStatus(uf, DFModelo.NFE);
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T17:57:05.439Z
+// Sync: 2026-04-23T18:10:29.315Z
