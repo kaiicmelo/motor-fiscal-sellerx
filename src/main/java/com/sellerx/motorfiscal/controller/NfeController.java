@@ -2,10 +2,11 @@ package com.sellerx.motorfiscal.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.fincatto.nfe400.webservices.WSFacade;
-import com.fincatto.nfe.NFeConfig;
-import com.fincatto.nfe.DFAmbiente;
-import com.fincatto.nfe.DFUnidadeFederativa;
+import com.fincatto.documentofiscal.nfe400.webservices.WSFacade;
+import com.fincatto.documentofiscal.nfe.NFeConfig;
+import com.fincatto.documentofiscal.DFAmbiente;
+import com.fincatto.documentofiscal.DFUnidadeFederativa;
+import com.fincatto.documentofiscal.DFModelo;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.net.URL;
@@ -13,9 +14,9 @@ import java.net.URLConnection;
 import java.security.KeyStore;
 import java.util.Map;
 import java.util.HashMap;
-import com.fincatto.nfe400.classes.nota.*;
-import com.fincatto.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
-import com.fincatto.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
+import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno;
+import com.fincatto.documentofiscal.nfe400.classes.statusservico.consulta.NFStatusServicoConsultaRetorno;
 
 @RestController
 @RequestMapping("/api/nfe")
@@ -25,14 +26,12 @@ public class NfeController {
     @RequestMapping(value = "/process", method = {RequestMethod.POST, RequestMethod.GET, RequestMethod.OPTIONS})
     public ResponseEntity<Map<String, Object>> processAction(@RequestBody(required = false) Map<String, Object> payload) {
         try {
-            // Previne 400 Bad Request automático se a chamada vier sem body (ex: requisição GET/OPTIONS no navegador)
             if (payload == null || payload.isEmpty()) {
                 return ResponseEntity.ok(Map.of("status", "online", "message", "Motor Fiscal rodando e mapeado corretamente na rota /api/nfe/process"));
             }
 
             String action = (String) payload.get("action");
             
-            // Healthcheck do App SellerX
             if ("ping_test".equals(action)) {
                 return ResponseEntity.ok(Map.of("status", "online", "message", "Ping test concluído. A rota existe e responde perfeitamente."));
             }
@@ -64,37 +63,47 @@ public class NfeController {
                 public DFAmbiente getAmbiente() {
                     return "PRODUCAO".equalsIgnoreCase(ambienteStr) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
                 }
+                
                 @Override
-                public KeyStore getCertificadoKeyStore() {
-                    try {
-                        KeyStore ks = KeyStore.getInstance("PKCS12");
-                        ks.load(new ByteArrayInputStream(pfxBytes), getCertificadoSenha().toCharArray());
-                        return ks;
-                    } catch (Exception e) {
-                        throw new RuntimeException("Erro ao carregar o certificado", e);
-                    }
+                public String getCertificadoCaminho() {
+                    return null; 
                 }
                 @Override
                 public String getCertificadoSenha() {
                     return certPass;
                 }
                 @Override
-                public KeyStore getCadeiaCertificadosKeyStore() {
-                    try {
-                        return KeyStore.getInstance("JKS"); 
-                    } catch (Exception e) {
-                        throw new RuntimeException("Erro ao carregar a cadeia de certificados", e);
-                    }
+                public String getCadeiaCertificadosCaminho() {
+                    return null; 
                 }
                 @Override
                 public String getCadeiaCertificadosSenha() {
                     return "changeit";
                 }
+
+                @Override public String getDfeTamanhoLote() { return "1"; }
+                @Override public String getPathCertificados() { return null; }
+                @Override public String getPathNFe() { return null; }
+                @Override public int getPortaWS() { return 443; } 
+                @Override public boolean isContingenciaSCVCM() { return false; }
+                @Override public boolean isContingenciaSCVSP() { return false; }
+                @Override public boolean isProdutorRural() { return false; }
+                @Override public String getUrlSEFAZ(DFModelo modelo) { return null; } 
+                @Override public boolean isValidaCertificadoOffLine() { return false; }
+                @Override public String getProxyHost() { return null; }
+                @Override public int getProxyPort() { return 0; }
+                @Override public String getProxyUser() { return null; }
+                @Override public String getProxyPass() { return null; }
+                @Override public String getWebServiceUF() { return ufString; } 
+                @Override public String getVersao() { return "4.00"; } 
             };
 
             Map<String, Object> result = new HashMap<>();
-            WSFacade wsFacade = new WSFacade(config);
-            
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            ks.load(new ByteArrayInputStream(pfxBytes), certPass.toCharArray());
+
+            WSFacade wsFacade = new WSFacade(config, ks); 
+
             switch (action) {
                 case "emitir":
                     result = handleEmitir(payload, wsFacade);
@@ -146,4 +155,4 @@ public class NfeController {
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro");
     }
 }
-// Sync: 2026-04-23T17:29:12.749Z
+// Sync: 2026-04-23T17:49:51.660Z
