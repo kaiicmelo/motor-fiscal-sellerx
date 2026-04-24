@@ -31,9 +31,7 @@ public class NfeController {
             Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            // SEGURO: Se o iAtlas mandar null, usamos a nota 1.
-            String numeroNota = (invoice.get("numero") == null || String.valueOf(invoice.get("numero")).equals("null")) 
-                ? "1" : String.valueOf(invoice.get("numero"));
+            String numeroNota = (invoice.get("numero") == null || String.valueOf(invoice.get("numero")).equals("null")) ? "1" : String.valueOf(invoice.get("numero"));
 
             URL url = new URL((String) company.get("certificate_file_uri"));
             String certPass = (String) company.get("certificate_password");
@@ -73,7 +71,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.0.9");
+            ide.setVersaoEmissor("1.1.0");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -84,8 +82,8 @@ public class NfeController {
             info.setEmitente(emit);
 
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
-            String dDoc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
-            if(dDoc.length() > 11) dest.setCnpj(dDoc); else dest.setCpf(dDoc);
+            String doc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
+            if(doc.length() > 11) dest.setCnpj(doc); else dest.setCpf(doc);
             dest.setRazaoSocial(String.valueOf(customer.get("nome")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
