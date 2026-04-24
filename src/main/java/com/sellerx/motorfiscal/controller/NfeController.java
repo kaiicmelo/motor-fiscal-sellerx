@@ -76,7 +76,7 @@ public class NfeController {
             ide.setTipoImpressao(NFTipoImpressao.DANFE_NORMAL_RETRATO);
             ide.setFinalidade(NFFinalidade.NORMAL);
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
-            ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.OPERACAO_INTERNET);
+            ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
             ide.setVersaoEmissor("1.0.0");
             
@@ -145,7 +145,7 @@ public class NfeController {
                     prod.setValorUnitario(valorUnit);
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
-                    prod.setIndicadorTotal(NFNotaInfoItemIndicadorTotal.VALOR_ITEM_COMPOE_TOTAL);
+                    prod.setIndicadorTotal(xmlParser.read(NFNotaInfoItemProduto.class, "<prod><indTot>1</indTot></prod>", false).getIndicadorTotal());
                     item.setProduto(prod);
                     
                     String xmlImposto = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS><PIS><PISOutr><CST>99</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS><COFINS><COFINSOutr><CST>99</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS></imposto>";
@@ -200,4 +200,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T18:03:32.373Z-xa4bd
+// Quebra Cache: 2026-04-24T18:14:43.523Z-rzi4v
