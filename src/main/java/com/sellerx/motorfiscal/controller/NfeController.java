@@ -145,6 +145,7 @@ public class NfeController {
                     prod.setValorUnitario(valorUnit);
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
+                    // PATCH ABSOLUTO AQUI:
                     prod.setIndicadorTotal(xmlParser.read(NFNotaInfoItemProduto.class, "<prod><indTot>1</indTot></prod>", false).getIndicadorTotal());
                     item.setProduto(prod);
                     
@@ -189,15 +190,9 @@ public class NfeController {
 
         } catch (Exception e) { 
             e.printStackTrace();
-            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            Throwable cause = e.getCause();
-            while (cause != null) {
-                errorMsg += " | Detalhe: " + (cause.getMessage() != null ? cause.getMessage() : cause.toString());
-                cause = cause.getCause();
-            }
-            return ResponseEntity.status(500).body(Map.of("erro", errorMsg, "status", "Motor Error")); 
+            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage(), "status", "Motor Error")); 
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T18:27:07.523Z-of9su8
+// Quebra Cache: 2026-04-24T18:33:01.560Z-eetgsu
