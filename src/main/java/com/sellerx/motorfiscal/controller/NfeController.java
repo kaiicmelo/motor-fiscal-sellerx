@@ -170,4 +170,4 @@ public class NfeController {
     }
 }
 
-// Sync: 2026-04-23T20:37:41.740Z
+// Sync: 2026-04-24T11:18:21.600Z
