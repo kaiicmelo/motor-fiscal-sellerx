@@ -200,4 +200,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T17:59:21.760Z-guhkmf
+// Quebra Cache: 2026-04-24T18:03:32.373Z-xa4bd
