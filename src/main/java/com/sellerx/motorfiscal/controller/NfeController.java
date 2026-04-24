@@ -146,14 +146,15 @@ public class NfeController {
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
                     try {
-                        // Tenta forçar via XML injection se o campo existir internamente
-                        String itemXml = xmlParser.write(prod);
+                        java.io.StringWriter sw = new java.io.StringWriter();
+                        xmlParser.write(prod, sw);
+                        String itemXml = sw.toString();
                         if (!itemXml.contains("<indTot>")) {
                             itemXml = itemXml.replace("</prod>", "<indTot>1</indTot></prod>");
                             prod = xmlParser.read(NFNotaInfoItemProduto.class, itemXml);
                         }
                     } catch (Exception e) {
-                        // Se falhar, deixa o padrão da lib, melhor emitir sem o campo do que não compilar
+                        // Se falhar a manipulação, o objeto 'prod' original segue o fluxo
                     }
                     item.setProduto(prod);
                     
@@ -203,4 +204,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T18:51:16.844Z-yrg6rk
+// Quebra Cache: 2026-04-24T19:04:58.996Z-7b00n
