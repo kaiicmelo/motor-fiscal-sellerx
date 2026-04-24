@@ -20,6 +20,7 @@ import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
+import org.simpleframework.xml.core.Persister;
 
 @RestController
 @RequestMapping("/api/nfe")
@@ -57,11 +58,10 @@ public class NfeController {
 
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
-            
-            // PATCH: FIX DO XML SIMPLES
-            info.setVersao("4.00");
+            // CORREÇÃO: A biblioteca espera um BigDecimal, não String
+            info.setVersao(new BigDecimal("4.00"));
 
-            // 1. IDENTIFICAÇÃO (COMPILAÇÃO SEGURA)
+            // 1. IDENTIFICAÇÃO
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -110,12 +110,14 @@ public class NfeController {
 
             // 4. ITENS DINÂMICOS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
+            BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
 
             if (items != null) {
                 for (Map<String, Object> itemData : items) {
                     NFNotaInfoItem item = new NFNotaInfoItem();
-                    item.setNumeroOrdem(Integer.valueOf(ordem++)); // Evitando conflito int/Integer
+                    // CORREÇÃO: O método correto em v5.x é setNumeroItem
+                    item.setNumeroItem(Integer.valueOf(ordem++));
 
                     NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
                     prod.setCodigo(String.valueOf(itemData.get("codigo")));
@@ -128,6 +130,7 @@ public class NfeController {
                     BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
                     BigDecimal valorUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
                     BigDecimal valorTotalItem = qtd.multiply(valorUnit).setScale(2, RoundingMode.HALF_UP);
+                    totalProdutos = totalProdutos.add(valorTotalItem);
 
                     prod.setQuantidadeComercial(qtd);
                     prod.setQuantidadeTributavel(qtd);
@@ -140,6 +143,26 @@ public class NfeController {
                 }
             }
             info.setItens(listaItens);
+
+            // INJEÇÃO XML DEFINITIVA: BLINDANDO O COMPILADOR E GARANTINDO AS TAGS DA SEFAZ
+            Persister xmlParser = new Persister();
+
+            // 5. TOTAIS
+            String xmlTotal = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos.toString() + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos.toString() + "</vNF></ICMSTot></total>";
+            NFNotaInfoTotal total = xmlParser.read(NFNotaInfoTotal.class, xmlTotal, false);
+            info.setTotal(total);
+
+            // 6. TRANSPORTE
+            String modalidade = String.valueOf(invoice.getOrDefault("modalidade_frete", "9"));
+            String xmlTransp = "<transp><modFrete>" + modalidade + "</modFrete></transp>";
+            NFNotaInfoTransporte trans = xmlParser.read(NFNotaInfoTransporte.class, xmlTransp, false);
+            info.setTransporte(trans);
+
+            // 7. PAGAMENTO
+            String formaPag = String.valueOf(invoice.getOrDefault("forma_pagamento", "01"));
+            String xmlPag = "<pag><detPag><tPag>" + formaPag + "</tPag><vPag>" + totalProdutos.toString() + "</vPag></detPag></pag>";
+            NFNotaInfoPagamento pag = xmlParser.read(NFNotaInfoPagamento.class, xmlPag, false);
+            info.setPagamento(pag);
 
             nota.setInfo(info);
             
@@ -165,4 +188,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Prod Sync: 2026-04-24T14:31:17.665Z
+// Sync: 2026-04-24T14:47:08.148Z
