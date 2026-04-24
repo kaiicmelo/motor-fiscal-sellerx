@@ -7,4 +7,4 @@ FROM openjdk:17.0.1-jdk-slim
 COPY --from=build /app/target/motor-fiscal-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
-# Sync: 2026-04-23T20:37:41.740Z
+# Sync: 2026-04-24T11:18:21.600Z
