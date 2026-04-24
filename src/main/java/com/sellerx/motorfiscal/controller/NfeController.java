@@ -29,13 +29,10 @@ public class NfeController {
 
     @PostMapping("/process")
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
+        String numNotaLog = "0";
         try {
-            String action = (String) payload.get("action");
-            if ("ping".equals(action)) return ResponseEntity.ok(Map.of("status", "online"));
-
-            // Diagnóstico de entrada: Garante que os dados chegaram
             if (payload == null || payload.get("company") == null) {
-                return ResponseEntity.badRequest().body(Map.of("erro", "Payload ou dados da empresa ausentes"));
+                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto recebido pelo Motor"));
             }
 
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
@@ -43,26 +40,20 @@ public class NfeController {
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            // 1. CARREGAMENTO DO CERTIFICADO (Ponto crítico)
+            numNotaLog = String.valueOf(invoice.getOrDefault("numero", "0"));
+
+            // 1. VALIDAÇÃO DO CERTIFICADO
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
-            
+            if (certUri == null || certPass == null) throw new Exception("Dados do certificado ausentes (URI/Senha)");
+
+            URL url = new URL(certUri);
             byte[] pfx;
-            try {
-                URL url = new URL(certUri);
-                try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
-            } catch (Exception e) {
-                return ResponseEntity.status(500).body(Map.of("erro", "Falha ao baixar certificado: " + e.getMessage()));
-            }
-
+            try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
+            
             KeyStore ks = KeyStore.getInstance("PKCS12");
-            try {
-                ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
-            } catch (Exception e) {
-                return ResponseEntity.status(401).body(Map.of("erro", "Senha do certificado incorreta ou arquivo inválido."));
-            }
+            ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
 
-            // 2. CONFIGURAÇÃO (Blindada)
             NFeConfig config = new NFeConfig() {
                 @Override public DFUnidadeFederativa getCUF() { return DFUnidadeFederativa.valueOfCodigo(String.valueOf(company.getOrDefault("uf_codigo", "35"))); }
                 @Override public DFAmbiente getAmbiente() { return "PRODUCAO".equals(company.get("ambiente")) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO; }
@@ -76,16 +67,16 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
+            // IDE
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
             ide.setNaturezaOperacao(String.valueOf(invoice.getOrDefault("natureza_operacao", "VENDA")));
             ide.setModelo(DFModelo.NFE);
             ide.setSerie(String.valueOf(invoice.getOrDefault("serie", "1")));
-            ide.setNumeroNota(String.valueOf(invoice.getOrDefault("numero", "1")));
+            ide.setNumeroNota(numNotaLog);
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
-            
             ide.setTipo(NFTipo.SAIDA);
             ide.setIdentificadorLocalDestinoOperacao(NFIdentificadorLocalDestinoOperacao.OPERACAO_INTERNA);
             ide.setCodigoMunicipio(String.valueOf(company.get("codigo_municipio")));
@@ -94,108 +85,70 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.0.0");
-            
+            ide.setVersaoEmissor("1.0.5");
             info.setIdentificacao(ide);
 
+            // EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
             emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")));
             emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
-            
-            NFEndereco endE = new NFEndereco();
-            endE.setLogradouro(String.valueOf(company.get("logradouro")));
-            endE.setNumero(String.valueOf(company.get("numero")));
-            endE.setBairro(String.valueOf(company.get("bairro")));
-            endE.setCodigoMunicipio(String.valueOf(company.get("codigo_municipio")));
-            endE.setDescricaoMunicipio(String.valueOf(company.get("municipio")));
-            endE.setUf(config.getCUF());
-            endE.setCep(String.valueOf(company.get("cep")).replaceAll("[^0-9]", ""));
-            emit.setEndereco(endE);
             info.setEmitente(emit);
 
+            // DESTINATARIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             String docDest = String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "");
             if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
             dest.setRazaoSocial(String.valueOf(customer.get("nome")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
-            
-            NFEndereco endD = new NFEndereco();
-            endD.setLogradouro(String.valueOf(customer.get("logradouro")));
-            endD.setNumero(String.valueOf(customer.get("numero")));
-            endD.setBairro(String.valueOf(customer.get("bairro")));
-            endD.setCodigoMunicipio(String.valueOf(customer.get("codigo_municipio")));
-            endD.setDescricaoMunicipio(String.valueOf(customer.get("municipio")));
-            endD.setUf(DFUnidadeFederativa.valueOfCodigo(String.valueOf(customer.getOrDefault("uf_codigo", "35"))));
-            endD.setCep(String.valueOf(customer.get("cep")).replaceAll("[^0-9]", ""));
-            dest.setEndereco(endD);
             info.setDestinatario(dest);
 
             Persister xmlParser = new Persister();
-
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
 
-            if (items != null) {
-                for (Map<String, Object> itemData : items) {
-                    NFNotaInfoItem item = new NFNotaInfoItem();
-                    item.setNumeroItem(Integer.valueOf(ordem++));
+            for (Map<String, Object> itemData : items) {
+                NFNotaInfoItem item = new NFNotaInfoItem();
+                item.setNumeroItem(ordem++);
+                NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
+                prod.setCodigo(String.valueOf(itemData.get("codigo")));
+                prod.setDescricao(String.valueOf(itemData.get("descricao")));
+                prod.setNcm(String.valueOf(itemData.get("ncm")));
+                prod.setCfop(String.valueOf(itemData.get("cfop")));
+                prod.setUnidadeComercial("UN");
+                prod.setUnidadeTributavel("UN");
+                BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
+                BigDecimal vUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
+                BigDecimal vTotal = qtd.multiply(vUnit).setScale(2, RoundingMode.HALF_UP);
+                totalProdutos = totalProdutos.add(vTotal);
+                prod.setQuantidadeComercial(qtd);
+                prod.setQuantidadeTributavel(qtd);
+                prod.setValorUnitario(vUnit);
+                prod.setValorUnitarioTributavel(vUnit);
+                prod.setValorTotalBruto(vTotal);
+                item.setProduto(prod);
 
-                    NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
-                    prod.setCodigo(String.valueOf(itemData.get("codigo")));
-                    prod.setDescricao(String.valueOf(itemData.get("descricao")));
-                    prod.setNcm(String.valueOf(itemData.get("ncm")));
-                    prod.setCfop(String.valueOf(itemData.get("cfop")));
-                    prod.setUnidadeComercial(String.valueOf(itemData.getOrDefault("unidade", "UN")));
-                    prod.setUnidadeTributavel(String.valueOf(itemData.getOrDefault("unidade", "UN")));
-                    
-                    BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
-                    BigDecimal valorUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
-                    BigDecimal valorTotalItem = qtd.multiply(valorUnit).setScale(2, RoundingMode.HALF_UP);
-                    totalProdutos = totalProdutos.add(valorTotalItem);
-
-                    prod.setQuantidadeComercial(qtd);
-                    prod.setQuantidadeTributavel(qtd);
-                    prod.setValorUnitario(valorUnit);
-                    prod.setValorUnitarioTributavel(valorUnit);
-                    prod.setValorTotalBruto(valorTotalItem);
-                    try {
-                        java.io.StringWriter sw = new java.io.StringWriter();
-                        xmlParser.write(prod, sw);
-                        String itemXml = sw.toString();
-                        if (!itemXml.contains("<indTot>")) {
-                            itemXml = itemXml.replace("</prod>", "<indTot>1</indTot></prod>");
-                            prod = xmlParser.read(NFNotaInfoItemProduto.class, itemXml);
-                        }
-                    } catch (Exception e) {
-                        // Se falhar a manipulação, o objeto 'prod' original segue o fluxo
-                    }
-                    item.setProduto(prod);
-                    
-                    String xmlImposto = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS><PIS><PISOutr><CST>99</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS><COFINS><COFINSOutr><CST>99</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS></imposto>";
-                    NFNotaInfoItemImposto imposto = xmlParser.read(NFNotaInfoItemImposto.class, xmlImposto, false);
-                    item.setImposto(imposto);
-                    
-                    listaItens.add(item);
-                }
+                String xmlImp = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>";
+                item.setImposto(xmlParser.read(NFNotaInfoItemImposto.class, xmlImp));
+                listaItens.add(item);
             }
             info.setItens(listaItens);
 
-            String xmlTotal = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos.toString() + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos.toString() + "</vNF></ICMSTot></total>";
-            NFNotaInfoTotal total = xmlParser.read(NFNotaInfoTotal.class, xmlTotal, false);
-            info.setTotal(total);
+            NFNotaInfoTotal tot = new NFNotaInfoTotal();
+            String xmlTot = "<ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos + "</vNF></ICMSTot>";
+            tot.setIcmstot(xmlParser.read(NFNotaInfoICMSTotal.class, xmlTot));
+            info.setTotal(tot);
 
-            String modalidade = String.valueOf(invoice.getOrDefault("modalidade_frete", "9"));
-            String xmlTransp = "<transp><modFrete>" + modalidade + "</modFrete></transp>";
-            NFNotaInfoTransporte trans = xmlParser.read(NFNotaInfoTransporte.class, xmlTransp, false);
-            info.setTransporte(trans);
-
-            String formaPag = String.valueOf(invoice.getOrDefault("forma_pagamento", "01"));
-            String xmlPag = "<pag><detPag><tPag>" + formaPag + "</tPag><vPag>" + totalProdutos.toString() + "</vPag></detPag></pag>";
-            NFNotaInfoPagamento pag = xmlParser.read(NFNotaInfoPagamento.class, xmlPag, false);
+            NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
+            String xmlPag = "<detPag><tPag>01</tPag><vPag>" + totalProdutos + "</vPag></detPag>";
+            pag.setDetalhamentoPagamento(Collections.singletonList(xmlParser.read(NFNotaInfoPagamentoDetalhe.class, xmlPag)));
             info.setPagamento(pag);
+
+            NFNotaInfoTransporte transp = new NFNotaInfoTransporte();
+            transp.setModalidadeFrete(NFModalidadeFrete.SEM_FRETE);
+            info.setTransporte(transp);
 
             nota.setInfo(info);
             
@@ -204,33 +157,29 @@ public class NfeController {
             lote.setIdLote("1");
             lote.setVersao("4.00");
 
+            // TRANSMISSÃO COM TRAVA DE NULIDADE
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            // RETORNO PRECISO: Extrai o erro real do SEFAZ
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", res.getRetorno().getStatus()); // Ex: 100, 204, 702
-            response.put("motivo", res.getRetorno().getMotivo()); // Ex: Rejeição: NFC-e com Data-Hora de emissão atrasada
-            
-            if (res.getRetorno().getInfoRecebimento() != null) {
-                response.put("recibo", res.getRetorno().getInfoRecebimento().getRecibo());
+            if (res == null || res.getRetorno() == null) {
+                throw new Exception("SEFAZ não retornou resposta (Possível erro de SSL ou Timeout)");
             }
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(Map.of(
+                "status", res.getRetorno().getStatus(),
+                "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "Sem motivo detalhado",
+                "numero_nota", numNotaLog
+            ));
 
         } catch (Exception e) {
-            // GERADOR DE ERRO PRECISO
-            java.io.StringWriter sw = new java.io.StringWriter();
-            e.printStackTrace(new java.io.PrintWriter(sw));
-            String stackTrace = sw.toString();
-            
+            String causa = e.getCause() != null ? e.getCause().getMessage() : "Nenhuma causa raiz detectada";
             return ResponseEntity.status(500).body(Map.of(
-                "erro", e.getMessage() != null ? e.getMessage() : "Erro desconhecido no Motor Fiscal",
-                "detalhes", stackTrace.substring(0, Math.min(stackTrace.length(), 500)), // Manda os primeiros 500 caracteres do erro real
-                "origem", "MotorFiscal-InternalError"
+                "erro", e.getMessage() != null ? e.getMessage() : "Erro Interno no Motor",
+                "causa", causa,
+                "numero_nota", numNotaLog
             ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:18:19.801Z-g0425j
+// Quebra Cache: 2026-04-24T19:29:00.337Z-zduz39
