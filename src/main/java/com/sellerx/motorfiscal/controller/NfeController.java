@@ -26,18 +26,19 @@ import org.simpleframework.xml.core.Persister;
 @CrossOrigin("*")
 public class NfeController {
 
+    @SuppressWarnings("unchecked")
     @PostMapping("/process")
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
         String numNotaLog = "0";
         try {
-            if (payload == null || payload.get("company") == null) return ResponseEntity.badRequest().body(Map.of("erro", "JSON incompleto"));
+            if (payload == null) return ResponseEntity.badRequest().body(Map.of("erro", "JSON vazio"));
 
             Map<String, Object> company = (Map<String, Object>) payload.get("company");
             Map<String, Object> invoice = (Map<String, Object>) payload.get("invoice");
             Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            numNotaLog = String.valueOf(invoice.getOrDefault("numero", invoice.getOrDefault("nextNum", "1")));
+            numNotaLog = String.valueOf(invoice.getOrDefault("numero", "1"));
 
             // CERTIFICADO
             URL url = new URL((String) company.get("certificate_file_uri"));
@@ -45,7 +46,7 @@ public class NfeController {
             byte[] pfx;
             try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
             KeyStore ks = KeyStore.getInstance("PKCS12");
-            ks.load(new ByteArrayInputStream(pfx), certPass != null ? certPass.toCharArray() : new char[0]);
+            ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
 
             NFeConfig config = new NFeConfig() {
                 @Override public DFUnidadeFederativa getCUF() { return DFUnidadeFederativa.valueOfCodigo(String.valueOf(company.getOrDefault("uf_codigo", "35"))); }
@@ -61,7 +62,7 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
-            // IDENTIFICAÇÃO (IDE)
+            // IDE
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -79,26 +80,26 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.0.5");
+            ide.setVersaoEmissor("1.0.6");
             info.setIdentificacao(ide);
 
             // EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
-            emit.setCnpj(String.valueOf(company.getOrDefault("cnpj", "")).replaceAll("[^0-9]", ""));
-            emit.setRazaoSocial(String.valueOf(company.getOrDefault("razao_social", "EMPRESA")));
-            emit.setInscricaoEstadual(String.valueOf(company.getOrDefault("inscricao_estadual", "")));
+            emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
+            emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
+            emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")));
             emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
             info.setEmitente(emit);
 
-            // DESTINATÁRIO
+            // DESTINATARIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             String docDest = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
-            if(docDest.length() > 11) dest.setCnpj(docDest); else if(!docDest.isEmpty()) dest.setCpf(docDest);
-            dest.setRazaoSocial(String.valueOf(customer.getOrDefault("nome", "CONSUMIDOR")));
+            if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
+            dest.setRazaoSocial(String.valueOf(customer.get("nome")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
 
-            // ITENS (TRATAMENTO DE NULOS E VÍRGULAS)
+            // ITENS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
@@ -114,26 +115,21 @@ public class NfeController {
                 prod.setUnidadeComercial("UN");
                 prod.setUnidadeTributavel("UN");
                 
-                // Conversão Segura de Números
                 Object qVal = itemData.get("quantidade");
-                BigDecimal qtd = (qVal != null && !String.valueOf(qVal).isEmpty()) ? 
-                    new BigDecimal(String.valueOf(qVal).replace(",", ".")) : BigDecimal.ONE;
-                
+                BigDecimal qtd = (qVal != null) ? new BigDecimal(String.valueOf(qVal).replace(",", ".")) : BigDecimal.ONE;
                 Object vVal = itemData.get("valor_unitario");
-                BigDecimal vUnit = (vVal != null && !String.valueOf(vVal).isEmpty()) ? 
-                    new BigDecimal(String.valueOf(vVal).replace(",", ".")) : BigDecimal.ZERO;
+                BigDecimal vUnit = (vVal != null) ? new BigDecimal(String.valueOf(vVal).replace(",", ".")) : BigDecimal.ZERO;
                 
                 BigDecimal vTotal = qtd.multiply(vUnit).setScale(2, RoundingMode.HALF_UP);
                 totalProdutos = totalProdutos.add(vTotal);
                 
                 prod.setQuantidadeComercial(qtd);
                 prod.setQuantidadeTributavel(qtd);
-                prod.setValorUnitario(vUnit); // vUnCom resolvido!
+                prod.setValorUnitario(vUnit);
                 prod.setValorUnitarioTributavel(vUnit);
                 prod.setValorTotalBruto(vTotal);
                 item.setProduto(prod);
 
-                // IMPOSTO VIA OBJETO (SEGURO)
                 NFNotaInfoItemImposto imposto = new NFNotaInfoItemImposto();
                 NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
                 NFNotaInfoItemImpostoICMSSN102 icms102 = new NFNotaInfoItemImpostoICMSSN102();
@@ -142,12 +138,10 @@ public class NfeController {
                 icms.setIcmssn102(icms102);
                 imposto.setIcms(icms);
                 item.setImposto(imposto);
-                
                 listaItens.add(item);
             }
             info.setItens(listaItens);
 
-            // TOTAIS E PAGAMENTO
             String vTot = totalProdutos.setScale(2, RoundingMode.HALF_UP).toPlainString();
             String xmlTot = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>"+vTot+"</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>"+vTot+"</vNF></ICMSTot></total>";
             info.setTotal(xmlParser.read(NFNotaInfoTotal.class, xmlTot));
@@ -166,15 +160,16 @@ public class NfeController {
             lote.setVersao("4.00");
 
             WSFacade ws = new WSFacade(config);
-            NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
+            // CORREÇÃO: NFLoteEnvioRetorno é o tipo correto para a versão 5.0.48
+            com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteEnvioRetorno res = ws.enviaLote(lote);
             
-            return ResponseEntity.ok(Map.of("status", res.getRetorno().getStatus(), "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "OK", "nota", numNotaLog));
+            return ResponseEntity.ok(Map.of("status", res.getStatus(), "motivo", res.getMotivo() != null ? res.getMotivo() : "OK", "nota", numNotaLog));
 
         } catch (Exception e) {
             StringWriter sw = new StringWriter(); e.printStackTrace(new PrintWriter(sw));
-            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage(), "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 800))));
+            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage(), "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 600))));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Cache: 1777063575255
+// Cache: 1777063958634
