@@ -5,4 +5,4 @@ RUN mvn clean package -DskipTests
 FROM openjdk:17.0.1-jdk-slim
 COPY --from=build /app/target/motor-fiscal-1.0.4-FINAL.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
-# Sync: 2026-04-24T14:47:08.148Z
+# Sync: 2026-04-24T14:50:12.800Z
