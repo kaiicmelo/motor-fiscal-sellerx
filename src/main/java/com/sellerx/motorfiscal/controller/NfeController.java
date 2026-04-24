@@ -58,7 +58,6 @@ public class NfeController {
             
             // ---> PATCH: XML VALIDATION FIX <---
             info.setVersao("4.00");
-            info.setIdentificador("00000000000000000000000000000000000000000000"); 
 
             // 1. IDENTIFICAÇÃO (BLINDADO)
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
@@ -232,4 +231,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T13:21:02.714Z
+// Sync: 2026-04-24T13:36:55.810Z
