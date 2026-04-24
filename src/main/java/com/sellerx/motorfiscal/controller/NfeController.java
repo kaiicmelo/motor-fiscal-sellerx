@@ -71,7 +71,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.4");
+            ide.setVersaoEmissor("1.1.5");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -121,9 +121,14 @@ public class NfeController {
             info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, "<pag><detPag><tPag>01</tPag><vPag>"+vt+"</vPag></detPag></pag>"));
             NFNotaInfoTransporte tr = new NFNotaInfoTransporte(); tr.setModalidadeFrete(NFModalidadeFrete.valueOfCodigo("9"));
             info.setTransporte(tr); nota.setInfo(info);
+            
             WSFacade ws = new WSFacade(config);
             NFLoteEnvio l = new NFLoteEnvio(); l.setNotas(Collections.singletonList(nota)); l.setIdLote("1"); l.setVersao("4.00");
-            NFLoteEnvioRetorno res = ws.enviaLote(l);
+            
+            // CORREÇÃO v1.1.5: Captura NFLoteEnvioRetornoDados e extrai o Retorno
+            NFLoteEnvioRetornoDados resDados = ws.enviaLote(l);
+            NFLoteEnvioRetorno res = resDados.getRetorno();
+            
             return ResponseEntity.ok(Map.of("status", res.getStatus(), "motivo", res.getMotivo() != null ? res.getMotivo() : "OK"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("erro", e.getMessage()));
