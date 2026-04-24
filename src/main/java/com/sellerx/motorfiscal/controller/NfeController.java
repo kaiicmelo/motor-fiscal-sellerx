@@ -44,7 +44,6 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setIdentificador("00000000000000000000000000000000000000000000");
 
-            // IDENTIFICACAO - CORREÇÃO DO ERRO DAS FOTOS
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -53,72 +52,71 @@ public class NfeController {
             ide.setSerie("1");
             ide.setNumeroNota("1");
             ide.setDataHoraEmissao(ZonedDateTime.now());
-            ide.setTipoDocumento(NFNotaInfoTipoDocumento.SAIDA);
-            ide.setIdentificadorLocalDestinoOperacao(NFIdentificadorLocalDestinoOperacao.OPERACAO_INTERNA);
+            // USANDO valueOfCodigo PARA EVITAR ERRO DE COMPILACAO DE SYMBOL
+            ide.setTipoDocumento(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoTipoDocumento.valueOfCodigo("1"));
+            ide.setIdentificadorLocalDestinoOperacao(com.fincatto.documentofiscal.nfe400.classes.NFIdentificadorLocalDestinoOperacao.valueOfCodigo("1"));
             ide.setCodigoMunicipio("3516200");
-            ide.setTipoImpressao(NFNotaInfoTipoImpressao.DANFE_RETRATO);
-            ide.setTipoEmissao(com.fincatto.documentofiscal.nfe.NFTipoEmissao.EMISSAO_NORMAL); // FIX: CAMPO QUE FALTAVA
+            ide.setTipoImpressao(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoTipoImpressao.valueOfCodigo("1"));
+            ide.setTipoEmissao(com.fincatto.documentofiscal.nfe.NFTipoEmissao.valueOfCodigo("1"));
             ide.setAmbiente(config.getAmbiente());
-            ide.setFinalidade(NFNotaInfoFinalidade.NORMAL);
-            ide.setOperacaoConsumidorFinal(NFNotaInfoOperacaoConsumidorFinal.SIM);
-            ide.setIndicadorPresencaComprador(NFNotaInfoIndPresencaComprador.OPERACAO_PRESENCIAL);
+            ide.setFinalidade(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoFinalidade.valueOfCodigo("1"));
+            ide.setOperacaoConsumidorFinal(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoOperacaoConsumidorFinal.valueOfCodigo("1"));
+            ide.setIndicadorPresencaComprador(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoIndPresencaComprador.valueOfCodigo("1"));
             info.setIdentificacao(ide);
 
-            // EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj((String)company.get("cnpj"));
             emit.setRazaoSocial((String)company.get("razao_social"));
             emit.setInscricaoEstadual("ISENTO");
-            emit.setCrt(com.fincatto.documentofiscal.nfe.classes.CRT.SIMPLES_NACIONAL);
+            emit.setCrt(com.fincatto.documentofiscal.nfe.classes.CRT.valueOfCodigo("1"));
             NFEndereco endE = new NFEndereco();
             endE.setLogradouro("RUA"); endE.setNumero("1"); endE.setBairro("B"); endE.setCodigoMunicipio("3516200");
             endE.setDescricaoMunicipio("FRANCA"); endE.setUf(config.getCUF()); endE.setCep("14400000");
             emit.setEndereco(endE);
             info.setEmitente(emit);
 
-            // DESTINATARIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             dest.setCpf("00000000000"); dest.setRazaoSocial("CONSUMIDOR");
-            dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
+            dest.setIndicadorIEDestinatario(com.fincatto.documentofiscal.nfe400.classes.NFIndicadorIEDestinatario.valueOfCodigo("9"));
             info.setDestinatario(dest);
 
-            // ITEM DUMMY PARA VALIDACAO
             NFNotaInfoItem item = new NFNotaInfoItem();
-            item.setNumeroOrdem(1);
             NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
             prod.setCodigo("1"); prod.setDescricao("PRODUTO"); prod.setNcm("94039000"); prod.setCfop("5102");
             prod.setUnidadeComercial("UN"); prod.setQuantidadeComercial(new BigDecimal("1.00"));
             prod.setValorUnitario(new BigDecimal("10.00")); prod.setValorTotalBruto(new BigDecimal("10.00"));
-            prod.setIndicaTotal(NFNotaInfoItemIndicadorTotal.SOMA_VALOR_ITEM_VALOR_TOTAL_NFE);
+            prod.setIndicaTotal(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoItemIndicadorTotal.valueOfCodigo("1"));
             item.setProduto(prod);
             
             NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
             NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
             NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
-            sn.setOrigem(NFOrigem.NACIONAL); sn.setSituacaoOperacaoSN(NFNotaSituacaoOperacionalSimplesNacional.IMUNE);
+            sn.setOrigem(com.fincatto.documentofiscal.nfe400.classes.NFOrigem.valueOfCodigo("0"));
+            sn.setSituacaoOperacaoSN(com.fincatto.documentofiscal.nfe400.classes.NFNotaSituacaoOperacionalSimplesNacional.valueOfCodigo("102"));
             icms.setIcmsSn102(sn); imp.setIcms(icms); item.setImposto(imp);
             info.setItens(Collections.singletonList(item));
 
-            // TOTAIS
             NFNotaInfoTotal total = new NFNotaInfoTotal();
             NFNotaInfoICMSTotal icmsT = new NFNotaInfoICMSTotal();
             icmsT.setBaseCalculoICMS(BigDecimal.ZERO); icmsT.setValorTotalICMS(BigDecimal.ZERO);
-            icmsT.setValorProdutoServico(new BigDecimal("10.00")); icmsT.setValorTotalNFe(new BigDecimal("10.00"));
+            icmsT.setValorTotalNFe(new BigDecimal("10.00"));
             total.setIcmsTotal(icmsT); info.setTotal(total);
 
-            // PAGAMENTO
             NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
             NFNotaInfoPagamentoDetalhe det = new NFNotaInfoPagamentoDetalhe();
-            det.setFormaPagamento(NFNotaInfoFormaPagamento.DINHEIRO); det.setValorPagamento(new BigDecimal("10.00"));
+            det.setFormaPagamento(com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoFormaPagamento.valueOfCodigo("01"));
+            det.setValorPagamento(new BigDecimal("10.00"));
             pag.setDetalhamentoPagamentos(Collections.singletonList(det));
             info.setPagamento(pag);
 
-            transp: { NFNotaInfoTransporte t = new NFNotaInfoTransporte(); t.setModalidadeFrete(NFNotaInfoModalidadeFrete.SEM_FRETE); info.setTransporte(t); }
+            NFNotaInfoTransporte t = new NFNotaInfoTransporte(); 
+            t.setModalidadeFrete(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoModalidadeFrete.valueOfCodigo("9")); 
+            info.setTransporte(t);
 
             nota.setInfo(info);
             NFLoteEnvio lote = new NFLoteEnvio();
             lote.setNotas(Collections.singletonList(nota)); lote.setIdLote("1"); lote.setVersao("4.00");
-            lote.setIndicadorProcessamento(NFLoteIndicadorProcessamento.PROCESSAMENTO_ASSINCRONO);
+            lote.setIndicadorProcessamento(com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteIndicadorProcessamento.valueOfCodigo("1"));
 
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
@@ -127,4 +125,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T11:32:53.213Z
+// Sync: 2026-04-24T12:11:44.257Z
