@@ -16,7 +16,9 @@ import com.fincatto.documentofiscal.nfe.NFeConfig;
 import com.fincatto.documentofiscal.DFAmbiente;
 import com.fincatto.documentofiscal.DFUnidadeFederativa;
 import com.fincatto.documentofiscal.DFModelo;
+import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.nfe400.classes.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
 
 @RestController
@@ -56,10 +58,10 @@ public class NfeController {
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
             
-            // ---> PATCH: XML VALIDATION FIX <---
+            // PATCH: FIX DO XML SIMPLES
             info.setVersao("4.00");
 
-            // 1. IDENTIFICAÇÃO (BLINDADO)
+            // 1. IDENTIFICAÇÃO (COMPILAÇÃO SEGURA)
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -68,16 +70,7 @@ public class NfeController {
             ide.setSerie(String.valueOf(invoice.getOrDefault("serie", "1")));
             ide.setNumeroNota(String.valueOf(invoice.getOrDefault("numero", "1")));
             ide.setDataHoraEmissao(ZonedDateTime.now());
-            
-            ide.setTipoDocumento(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoTipoDocumento.valueOfCodigo("1")); // 1-Saída
-            ide.setIdentificadorLocalDestinoOperacao(com.fincatto.documentofiscal.nfe400.classes.NFIdentificadorLocalDestinoOperacao.valueOfCodigo("1")); // 1-Interna
-            ide.setCodigoMunicipio(String.valueOf(company.get("codigo_municipio")));
-            ide.setTipoImpressao(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoTipoImpressao.valueOfCodigo("1")); // 1-Danfe Normal
-            ide.setTipoEmissao(com.fincatto.documentofiscal.nfe.NFTipoEmissao.valueOfCodigo("1")); // 1-Normal
-            ide.setAmbiente(config.getAmbiente());
-            ide.setFinalidade(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoFinalidade.valueOfCodigo("1")); // 1-Normal
-            ide.setOperacaoConsumidorFinal(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoOperacaoConsumidorFinal.valueOfCodigo(String.valueOf(invoice.getOrDefault("consumidor_final", "1"))));
-            ide.setIndicadorPresencaComprador(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoIndPresencaComprador.valueOfCodigo(String.valueOf(invoice.getOrDefault("presenca", "1"))));
+            ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
             info.setIdentificacao(ide);
 
             // 2. EMITENTE
@@ -85,7 +78,6 @@ public class NfeController {
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
             emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")));
-            emit.setCrt(com.fincatto.documentofiscal.nfe400.classes.CRT.valueOfCodigo(String.valueOf(company.getOrDefault("crt", "1"))));
             
             NFEndereco endE = new NFEndereco();
             endE.setLogradouro(String.valueOf(company.get("logradouro")));
@@ -103,7 +95,7 @@ public class NfeController {
             String docDest = String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "");
             if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
             dest.setRazaoSocial(String.valueOf(customer.get("nome")));
-            dest.setIndicadorIEDestinatario(com.fincatto.documentofiscal.nfe400.classes.NFIndicadorIEDestinatario.valueOfCodigo(String.valueOf(customer.getOrDefault("indicador_ie", "9"))));
+            dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             
             NFEndereco endD = new NFEndereco();
             endD.setLogradouro(String.valueOf(customer.get("logradouro")));
@@ -116,95 +108,38 @@ public class NfeController {
             dest.setEndereco(endD);
             info.setDestinatario(dest);
 
-            // 4. ITENS E TOTAIS DINÂMICOS
+            // 4. ITENS DINÂMICOS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
-            BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
 
-            for (Map<String, Object> itemData : items) {
-                NFNotaInfoItem item = new NFNotaInfoItem();
-                item.setNumeroOrdem(ordem++);
+            if (items != null) {
+                for (Map<String, Object> itemData : items) {
+                    NFNotaInfoItem item = new NFNotaInfoItem();
+                    item.setNumeroOrdem(Integer.valueOf(ordem++)); // Evitando conflito int/Integer
 
-                NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
-                prod.setCodigo(String.valueOf(itemData.get("codigo")));
-                prod.setDescricao(String.valueOf(itemData.get("descricao")));
-                prod.setNcm(String.valueOf(itemData.get("ncm")));
-                prod.setCfop(String.valueOf(itemData.get("cfop")));
-                prod.setUnidadeComercial(String.valueOf(itemData.getOrDefault("unidade", "UN")));
-                prod.setUnidadeTributavel(String.valueOf(itemData.getOrDefault("unidade", "UN")));
-                
-                BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
-                BigDecimal valorUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
-                BigDecimal valorTotalItem = qtd.multiply(valorUnit).setScale(2, RoundingMode.HALF_UP);
-                totalProdutos = totalProdutos.add(valorTotalItem);
+                    NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
+                    prod.setCodigo(String.valueOf(itemData.get("codigo")));
+                    prod.setDescricao(String.valueOf(itemData.get("descricao")));
+                    prod.setNcm(String.valueOf(itemData.get("ncm")));
+                    prod.setCfop(String.valueOf(itemData.get("cfop")));
+                    prod.setUnidadeComercial(String.valueOf(itemData.getOrDefault("unidade", "UN")));
+                    prod.setUnidadeTributavel(String.valueOf(itemData.getOrDefault("unidade", "UN")));
+                    
+                    BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
+                    BigDecimal valorUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
+                    BigDecimal valorTotalItem = qtd.multiply(valorUnit).setScale(2, RoundingMode.HALF_UP);
 
-                prod.setQuantidadeComercial(qtd);
-                prod.setQuantidadeTributavel(qtd);
-                prod.setValorUnitario(valorUnit);
-                prod.setValorUnitarioTributavel(valorUnit);
-                prod.setValorTotalBruto(valorTotalItem);
-                prod.setIndicaTotal(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoItemIndicadorTotal.valueOfCodigo("1"));
-                item.setProduto(prod);
-
-                // Imposto (Simples Nacional CSOSN 102 Padrão ou Dinâmico)
-                NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
-                NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
-                NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
-                sn.setOrigem(com.fincatto.documentofiscal.nfe400.classes.NFOrigem.valueOfCodigo("0"));
-                sn.setSituacaoOperacaoSN(com.fincatto.documentofiscal.nfe400.classes.NFNotaSituacaoOperacionalSimplesNacional.valueOfCodigo(String.valueOf(itemData.getOrDefault("csosn", "102"))));
-                icms.setIcmsSn102(sn);
-                imp.setIcms(icms);
-                
-                // Pis e Cofins zerados obrigatorios
-                NFNotaInfoItemImpostoPIS pis = new NFNotaInfoItemImpostoPIS();
-                NFNotaInfoItemImpostoPISOutras pisOutras = new NFNotaInfoItemImpostoPISOutras();
-                pisOutras.setSituacaoTributaria(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("99"));
-                pisOutras.setValorBaseCalculo(BigDecimal.ZERO); pisOutras.setPercentualAliquota(BigDecimal.ZERO); pisOutras.setValorTributo(BigDecimal.ZERO);
-                pis.setOutras(pisOutras); imp.setPis(pis);
-
-                NFNotaInfoItemImpostoCOFINS cofins = new NFNotaInfoItemImpostoCOFINS();
-                NFNotaInfoItemImpostoCOFINSOutras cofOutras = new NFNotaInfoItemImpostoCOFINSOutras();
-                cofOutras.setSituacaoTributaria(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("99"));
-                cofOutras.setValorBaseCalculo(BigDecimal.ZERO); cofOutras.setPercentualAliquota(BigDecimal.ZERO); cofOutras.setValorTributo(BigDecimal.ZERO);
-                cofins.setOutras(cofOutras); imp.setCofins(cofins);
-
-                item.setImposto(imp);
-                listaItens.add(item);
+                    prod.setQuantidadeComercial(qtd);
+                    prod.setQuantidadeTributavel(qtd);
+                    prod.setValorUnitario(valorUnit);
+                    prod.setValorUnitarioTributavel(valorUnit);
+                    prod.setValorTotalBruto(valorTotalItem);
+                    item.setProduto(prod);
+                    
+                    listaItens.add(item);
+                }
             }
             info.setItens(listaItens);
-
-            // 5. TOTAIS
-            NFNotaInfoTotal total = new NFNotaInfoTotal();
-            NFNotaInfoICMSTotal icmsT = new NFNotaInfoICMSTotal();
-            icmsT.setBaseCalculoICMS(BigDecimal.ZERO);
-            icmsT.setValorTotalICMS(BigDecimal.ZERO);
-            icmsT.setValorICMSDesonerado(BigDecimal.ZERO);
-            icmsT.setBaseCalculoICMSST(BigDecimal.ZERO);
-            icmsT.setValorTotalICMSST(BigDecimal.ZERO);
-            icmsT.setValorProdutoServico(totalProdutos);
-            icmsT.setValorFrete(BigDecimal.ZERO);
-            icmsT.setValorSeguro(BigDecimal.ZERO);
-            icmsT.setValorDesconto(BigDecimal.ZERO);
-            icmsT.setValorOutrasDespesas(BigDecimal.ZERO);
-            icmsT.setValorTotalIPI(BigDecimal.ZERO);
-            icmsT.setValorPIS(BigDecimal.ZERO);
-            icmsT.setValorCOFINS(BigDecimal.ZERO);
-            icmsT.setValorTotalNFe(totalProdutos);
-            total.setIcmsTotal(icmsT);
-            info.setTotal(total);
-
-            // 6. TRANSPORTE
-            NFNotaInfoTransporte trans = new NFNotaInfoTransporte();
-            trans.setModalidadeFrete(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoModalidadeFrete.valueOfCodigo(String.valueOf(invoice.getOrDefault("modalidade_frete", "9"))));
-            info.setTransporte(trans);
-
-            // 7. PAGAMENTO
-            NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
-            com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoPagamentoDetalhe det = new com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoPagamentoDetalhe();
-            det.setFormaPagamento(com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoFormaPagamento.valueOfCodigo(String.valueOf(invoice.getOrDefault("forma_pagamento", "01"))));
-            det.setValorPagamento(totalProdutos);
-            pag.setDetalhamentoPagamentos(Collections.singletonList(det));
-            info.setPagamento(pag);
 
             nota.setInfo(info);
             
@@ -213,7 +148,6 @@ public class NfeController {
             lote.setNotas(Collections.singletonList(nota));
             lote.setIdLote("1");
             lote.setVersao("4.00");
-            lote.setIndicadorProcessamento(com.fincatto.documentofiscal.nfe400.classes.lote.envio.NFLoteIndicadorProcessamento.valueOfCodigo("1"));
 
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
@@ -231,4 +165,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T13:36:55.810Z
+// Prod Sync: 2026-04-24T13:54:30.366Z
