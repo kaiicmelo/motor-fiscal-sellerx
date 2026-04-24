@@ -58,10 +58,9 @@ public class NfeController {
 
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
-            // CORREÇÃO: A biblioteca espera um BigDecimal, não String
             info.setVersao(new BigDecimal("4.00"));
 
-            // 1. IDENTIFICAÇÃO
+            // 1. IDENTIFICAÇÃO - FORÇANDO CAMPOS OBRIGATÓRIOS DA SEFAZ
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -71,6 +70,18 @@ public class NfeController {
             ide.setNumeroNota(String.valueOf(invoice.getOrDefault("numero", "1")));
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
+            
+            // Novos campos vitais:
+            ide.setTipoNota(NFTipo.SAIDA);
+            ide.setIdentificadorLocalDestinoOperacao(NFIdentificadorLocalDestinoOperacao.OPERACAO_INTERNA);
+            ide.setCodigoMunicipio(String.valueOf(company.get("codigo_municipio")));
+            ide.setTipoImpressao(NFTipoImpressao.DANFE_NORMAL_RETRATO);
+            ide.setFinalidade(NFFinalidade.NORMAL);
+            ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
+            ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.OPERACAO_PELA_INTERNET);
+            ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
+            ide.setVersaoEmissor("1.0.0");
+            
             info.setIdentificacao(ide);
 
             // 2. EMITENTE
@@ -78,6 +89,7 @@ public class NfeController {
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
             emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")));
+            emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL); // Vital para Sefaz
             
             NFEndereco endE = new NFEndereco();
             endE.setLogradouro(String.valueOf(company.get("logradouro")));
@@ -108,6 +120,9 @@ public class NfeController {
             dest.setEndereco(endD);
             info.setDestinatario(dest);
 
+            // INSTANCIA DO PERSISTER PARA INJEÇÃO
+            Persister xmlParser = new Persister();
+
             // 4. ITENS DINÂMICOS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
@@ -116,7 +131,6 @@ public class NfeController {
             if (items != null) {
                 for (Map<String, Object> itemData : items) {
                     NFNotaInfoItem item = new NFNotaInfoItem();
-                    // CORREÇÃO: O método correto em v5.x é setNumeroItem
                     item.setNumeroItem(Integer.valueOf(ordem++));
 
                     NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
@@ -137,28 +151,29 @@ public class NfeController {
                     prod.setValorUnitario(valorUnit);
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
+                    prod.setIndicadorTotal(NFIndicadorTotal.VALOR_ITEM_COMPOE_TOTAL); // Obrigatório
                     item.setProduto(prod);
+                    
+                    // INJEÇÃO XML: GARANTINDO TRIBUTOS (A falta disso derruba a validação da biblioteca)
+                    String xmlImposto = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS><PIS><PISOutr><CST>99</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS><COFINS><COFINSOutr><CST>99</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS></imposto>";
+                    NFNotaInfoItemImposto imposto = xmlParser.read(NFNotaInfoItemImposto.class, xmlImposto, false);
+                    item.setImposto(imposto);
                     
                     listaItens.add(item);
                 }
             }
             info.setItens(listaItens);
 
-            // INJEÇÃO XML DEFINITIVA: BLINDANDO O COMPILADOR E GARANTINDO AS TAGS DA SEFAZ
-            Persister xmlParser = new Persister();
-
-            // 5. TOTAIS
+            // 5. TOTAIS, TRANSPORTE E PAGAMENTO VIA XML
             String xmlTotal = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos.toString() + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos.toString() + "</vNF></ICMSTot></total>";
             NFNotaInfoTotal total = xmlParser.read(NFNotaInfoTotal.class, xmlTotal, false);
             info.setTotal(total);
 
-            // 6. TRANSPORTE
             String modalidade = String.valueOf(invoice.getOrDefault("modalidade_frete", "9"));
             String xmlTransp = "<transp><modFrete>" + modalidade + "</modFrete></transp>";
             NFNotaInfoTransporte trans = xmlParser.read(NFNotaInfoTransporte.class, xmlTransp, false);
             info.setTransporte(trans);
 
-            // 7. PAGAMENTO
             String formaPag = String.valueOf(invoice.getOrDefault("forma_pagamento", "01"));
             String xmlPag = "<pag><detPag><tPag>" + formaPag + "</tPag><vPag>" + totalProdutos.toString() + "</vPag></detPag></pag>";
             NFNotaInfoPagamento pag = xmlParser.read(NFNotaInfoPagamento.class, xmlPag, false);
@@ -183,9 +198,16 @@ public class NfeController {
 
         } catch (Exception e) { 
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage())); 
+            // RESGATE BLINDADO DO ERRO: Evita o NullPointerException oculto que causa o 500 cego.
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            Throwable cause = e.getCause();
+            while (cause != null) {
+                errorMsg += " | Detalhe: " + (cause.getMessage() != null ? cause.getMessage() : cause.toString());
+                cause = cause.getCause();
+            }
+            return ResponseEntity.status(500).body(Map.of("erro", errorMsg, "status", "Motor Error")); 
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T14:50:12.800Z
+// Sync: 2026-04-24T15:03:55.549Z
