@@ -71,7 +71,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.5");
+            ide.setVersaoEmissor("1.1.6");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -111,7 +111,9 @@ public class NfeController {
                 NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
                 NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
                 NFNotaInfoItemImpostoICMSSN102 s102 = new NFNotaInfoItemImpostoICMSSN102();
-                s102.setOrigem(NFOrigem.NACIONAL); s102.setSituacaoOperacaoSN(NFSituacaoOperacaoSimplesNacional.valueOfCodigo("102"));
+                s102.setOrigem(NFOrigem.NACIONAL); 
+                // CORREÇÃO v1.1.6: Nome da classe de enumeração corrigido
+                s102.setSituacaoOperacaoSN(NFNotaInfoImpostoICMSSituacaoOperacaoSimplesNacional.valueOfCodigo("102"));
                 icms.setIcmssn102(s102); imp.setIcms(icms);
                 item.setImposto(imp); lista.add(item);
             }
@@ -125,7 +127,6 @@ public class NfeController {
             WSFacade ws = new WSFacade(config);
             NFLoteEnvio l = new NFLoteEnvio(); l.setNotas(Collections.singletonList(nota)); l.setIdLote("1"); l.setVersao("4.00");
             
-            // CORREÇÃO v1.1.5: Captura NFLoteEnvioRetornoDados e extrai o Retorno
             NFLoteEnvioRetornoDados resDados = ws.enviaLote(l);
             NFLoteEnvioRetorno res = resDados.getRetorno();
             
