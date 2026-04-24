@@ -170,4 +170,4 @@ public class NfeController {
         return Map.of("status", retorno.getStatus() != null ? retorno.getStatus() : "erro", "motivo", retorno.getMotivo());
     }
 }
-// Sync: 2026-04-24T12:53:13.723Z
+// Sync: 2026-04-24T13:06:33.396Z
