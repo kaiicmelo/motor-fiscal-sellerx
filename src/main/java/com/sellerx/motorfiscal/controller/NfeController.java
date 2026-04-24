@@ -31,7 +31,7 @@ public class NfeController {
             Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            // SEGURANÇA: Se o número for nulo, assume "1" para evitar Erro 500
+            // SEGURO: Se o iAtlas mandar null, usamos a nota 1.
             String numeroNota = (invoice.get("numero") == null || String.valueOf(invoice.get("numero")).equals("null")) 
                 ? "1" : String.valueOf(invoice.get("numero"));
 
@@ -62,7 +62,7 @@ public class NfeController {
             ide.setNaturezaOperacao(String.valueOf(invoice.getOrDefault("natureza_operacao", "VENDA")));
             ide.setModelo(DFModelo.NFE);
             ide.setSerie(String.valueOf(invoice.getOrDefault("serie", "1")));
-            ide.setNumeroNota(numeroNota); // Resolvido o null aqui
+            ide.setNumeroNota(numeroNota);
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
             ide.setTipo(NFTipo.SAIDA);
@@ -73,7 +73,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.0.8");
+            ide.setVersaoEmissor("1.0.9");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -84,8 +84,8 @@ public class NfeController {
             info.setEmitente(emit);
 
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
-            String doc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
-            if(doc.length() > 11) dest.setCnpj(doc); else dest.setCpf(doc);
+            String dDoc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
+            if(dDoc.length() > 11) dest.setCnpj(dDoc); else dest.setCpf(dDoc);
             dest.setRazaoSocial(String.valueOf(customer.get("nome")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
