@@ -71,7 +71,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.6");
+            ide.setVersaoEmissor("1.1.7");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -108,12 +108,13 @@ public class NfeController {
                 p.setValorUnitario(v); p.setValorUnitarioTributavel(v);
                 p.setValorTotalBruto(t);
                 item.setProduto(p);
+                
                 NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
                 NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
                 NFNotaInfoItemImpostoICMSSN102 s102 = new NFNotaInfoItemImpostoICMSSN102();
                 s102.setOrigem(NFOrigem.NACIONAL); 
-                // CORREÇÃO v1.1.6: Nome da classe de enumeração corrigido
-                s102.setSituacaoOperacaoSN(NFNotaInfoImpostoICMSSituacaoOperacaoSimplesNacional.valueOfCodigo("102"));
+                // CORREÇÃO v1.1.7: Uso do Enum direto para evitar erro de símbolo
+                s102.setSituacaoOperacaoSN(NFSituacaoOperacaoSimplesNacional.SN_102);
                 icms.setIcmssn102(s102); imp.setIcms(icms);
                 item.setImposto(imp); lista.add(item);
             }
@@ -126,10 +127,8 @@ public class NfeController {
             
             WSFacade ws = new WSFacade(config);
             NFLoteEnvio l = new NFLoteEnvio(); l.setNotas(Collections.singletonList(nota)); l.setIdLote("1"); l.setVersao("4.00");
-            
             NFLoteEnvioRetornoDados resDados = ws.enviaLote(l);
             NFLoteEnvioRetorno res = resDados.getRetorno();
-            
             return ResponseEntity.ok(Map.of("status", res.getStatus(), "motivo", res.getMotivo() != null ? res.getMotivo() : "OK"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("erro", e.getMessage()));
