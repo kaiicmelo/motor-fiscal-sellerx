@@ -24,7 +24,7 @@ import org.simpleframework.xml.core.Persister;
 
 @RestController
 @RequestMapping("/api/nfe")
-@CrossOrigin("*")
+@CrossOrigin("https://motor-fiscal-sellerx.onrender.com")
 public class NfeController {
 
     @PostMapping("/process")
@@ -60,7 +60,6 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
-            // 1. IDENTIFICAÇÃO - FORÇANDO CAMPOS OBRIGATÓRIOS DA SEFAZ
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -71,7 +70,6 @@ public class NfeController {
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
             
-            // Novos campos vitais:
             ide.setTipoNota(NFTipo.SAIDA);
             ide.setIdentificadorLocalDestinoOperacao(NFIdentificadorLocalDestinoOperacao.OPERACAO_INTERNA);
             ide.setCodigoMunicipio(String.valueOf(company.get("codigo_municipio")));
@@ -84,12 +82,11 @@ public class NfeController {
             
             info.setIdentificacao(ide);
 
-            // 2. EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
             emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")));
-            emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL); // Vital para Sefaz
+            emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
             
             NFEndereco endE = new NFEndereco();
             endE.setLogradouro(String.valueOf(company.get("logradouro")));
@@ -102,7 +99,6 @@ public class NfeController {
             emit.setEndereco(endE);
             info.setEmitente(emit);
 
-            // 3. DESTINATÁRIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             String docDest = String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "");
             if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
@@ -120,10 +116,8 @@ public class NfeController {
             dest.setEndereco(endD);
             info.setDestinatario(dest);
 
-            // INSTANCIA DO PERSISTER PARA INJEÇÃO
             Persister xmlParser = new Persister();
 
-            // 4. ITENS DINÂMICOS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
@@ -151,10 +145,9 @@ public class NfeController {
                     prod.setValorUnitario(valorUnit);
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
-                    prod.setIndicadorTotal(NFIndicadorTotal.VALOR_ITEM_COMPOE_TOTAL); // Obrigatório
+                    prod.setIndicadorTotal(NFIndicadorTotal.VALOR_ITEM_COMPOE_TOTAL);
                     item.setProduto(prod);
                     
-                    // INJEÇÃO XML: GARANTINDO TRIBUTOS (A falta disso derruba a validação da biblioteca)
                     String xmlImposto = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS><PIS><PISOutr><CST>99</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS><COFINS><COFINSOutr><CST>99</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS></imposto>";
                     NFNotaInfoItemImposto imposto = xmlParser.read(NFNotaInfoItemImposto.class, xmlImposto, false);
                     item.setImposto(imposto);
@@ -164,7 +157,6 @@ public class NfeController {
             }
             info.setItens(listaItens);
 
-            // 5. TOTAIS, TRANSPORTE E PAGAMENTO VIA XML
             String xmlTotal = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos.toString() + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos.toString() + "</vNF></ICMSTot></total>";
             NFNotaInfoTotal total = xmlParser.read(NFNotaInfoTotal.class, xmlTotal, false);
             info.setTotal(total);
@@ -181,7 +173,6 @@ public class NfeController {
 
             nota.setInfo(info);
             
-            // 8. ENVIO PARA SEFAZ
             NFLoteEnvio lote = new NFLoteEnvio();
             lote.setNotas(Collections.singletonList(nota));
             lote.setIdLote("1");
@@ -198,7 +189,6 @@ public class NfeController {
 
         } catch (Exception e) { 
             e.printStackTrace();
-            // RESGATE BLINDADO DO ERRO: Evita o NullPointerException oculto que causa o 500 cego.
             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             Throwable cause = e.getCause();
             while (cause != null) {
@@ -210,4 +200,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T15:10:44.105Z
+// Quebra Cache: 2026-04-24T17:36:59.462Z-p5p7p4
