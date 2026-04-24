@@ -31,30 +31,24 @@ public class NfeController {
 
     @PostMapping("/process")
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
-        String numNotaLog = "N/A";
+        String numNotaLog = "0";
         try {
-            // 1. VALIDAÇÃO DE SEGURANÇA (Evita o Erro 500 genérico)
-            if (payload == null) return ResponseEntity.badRequest().body(Map.of("erro", "Payload nulo"));
-            
+            if (payload == null || payload.get("company") == null) {
+                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto"));
+            }
+
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
             @SuppressWarnings("unchecked") Map<String, Object> invoice = (Map<String, Object>) payload.get("invoice");
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            if (company == null || invoice == null || customer == null || items == null) {
-                return ResponseEntity.badRequest().body(Map.of("erro", "Dados incompletos. Certifique-se de enviar company, invoice, customer e items."));
-            }
-
             numNotaLog = String.valueOf(invoice.getOrDefault("numero", "0"));
 
-            // 2. CARREGAMENTO DO CERTIFICADO
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
-            
             URL url = new URL(certUri);
             byte[] pfx;
             try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
-            
             KeyStore ks = KeyStore.getInstance("PKCS12");
             ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
 
@@ -67,7 +61,7 @@ public class NfeController {
                 @Override public String getCadeiaCertificadosSenha() { return certPass; }
             };
 
-            // 3. MONTAGEM DA NOTA
+            Persister xmlParser = new Persister();
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
@@ -106,7 +100,6 @@ public class NfeController {
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
 
-            Persister xmlParser = new Persister();
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
@@ -138,23 +131,21 @@ public class NfeController {
             }
             info.setItens(listaItens);
 
-            NFNotaInfoTotal tot = new NFNotaInfoTotal();
-            String xmlTot = "<ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos + "</vNF></ICMSTot>";
-            tot.setIcmstot(xmlParser.read(NFNotaInfoICMSTotal.class, xmlTot));
-            info.setTotal(tot);
+            // CORREÇÃO DO TOTAL (INJEÇÃO XML PARA EVITAR ERRO DE MÉTODO)
+            String xmlTotStr = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos + "</vNF></ICMSTot></total>";
+            info.setTotal(xmlParser.read(NFNotaInfoTotal.class, xmlTotStr));
 
-            NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
-            String xmlPag = "<detPag><tPag>01</tPag><vPag>" + totalProdutos + "</vPag></detPag>";
-            pag.setDetalhamentoPagamento(Collections.singletonList(xmlParser.read(NFNotaInfoPagamentoDetalhe.class, xmlPag)));
-            info.setPagamento(pag);
+            // CORREÇÃO DO PAGAMENTO
+            String xmlPagStr = "<pag><detPag><tPag>01</tPag><vPag>" + totalProdutos + "</vPag></detPag></pag>";
+            info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, xmlPagStr));
 
+            // CORREÇÃO DO TRANSPORTE
             NFNotaInfoTransporte transp = new NFNotaInfoTransporte();
-            transp.setModalidadeFrete(NFModalidadeFrete.SEM_FRETE);
+            transp.setModalidadeFrete(NFModalidadeFrete.SEM_OCORRENCIA_DE_TRANSPORTE);
             info.setTransporte(transp);
 
             nota.setInfo(info);
             
-            // 4. TRANSMISSÃO
             NFLoteEnvio lote = new NFLoteEnvio();
             lote.setNotas(Collections.singletonList(nota));
             lote.setIdLote("1");
@@ -163,24 +154,24 @@ public class NfeController {
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ não respondeu.");
+            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ sem resposta.");
 
             return ResponseEntity.ok(Map.of(
                 "status", res.getRetorno().getStatus(),
-                "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "Processado",
-                "numero_nota", numNotaLog
+                "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "OK",
+                "nota", numNotaLog
             ));
 
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             return ResponseEntity.status(500).body(Map.of(
-                "erro", e.getMessage() != null ? e.getMessage() : "Erro interno",
-                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 300)),
-                "numero_nota", numNotaLog
+                "erro", e.getMessage() != null ? e.getMessage() : "Erro Interno",
+                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 400)),
+                "nota", numNotaLog
             ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:38:11.702Z-vm6hlg
+// Quebra Cache: 2026-04-24T19:46:12.025Z-p63ude
