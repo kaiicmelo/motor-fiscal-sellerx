@@ -52,7 +52,8 @@ public class NfeController {
             ide.setSerie("1");
             ide.setNumeroNota("1");
             ide.setDataHoraEmissao(ZonedDateTime.now());
-            // USANDO valueOfCodigo PARA EVITAR ERRO DE COMPILACAO DE SYMBOL
+            
+            // FIX DEFINITIVO PARA COMPILACAO (EXPLICIT NAMES)
             ide.setTipoDocumento(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoTipoDocumento.valueOfCodigo("1"));
             ide.setIdentificadorLocalDestinoOperacao(com.fincatto.documentofiscal.nfe400.classes.NFIdentificadorLocalDestinoOperacao.valueOfCodigo("1"));
             ide.setCodigoMunicipio("3516200");
@@ -103,15 +104,16 @@ public class NfeController {
             total.setIcmsTotal(icmsT); info.setTotal(total);
 
             NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
-            NFNotaInfoPagamentoDetalhe det = new NFNotaInfoPagamentoDetalhe();
+            // FIX: PAGAMENTO DETALHE CLASS
+            com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoPagamentoDetalhe det = new com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoPagamentoDetalhe();
             det.setFormaPagamento(com.fincatto.documentofiscal.nfe400.classes.nota.NFNotaInfoFormaPagamento.valueOfCodigo("01"));
             det.setValorPagamento(new BigDecimal("10.00"));
             pag.setDetalhamentoPagamentos(Collections.singletonList(det));
             info.setPagamento(pag);
 
-            NFNotaInfoTransporte t = new NFNotaInfoTransporte(); 
-            t.setModalidadeFrete(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoModalidadeFrete.valueOfCodigo("9")); 
-            info.setTransporte(t);
+            NFNotaInfoTransporte tr = new NFNotaInfoTransporte();
+            tr.setModalidadeFrete(com.fincatto.documentofiscal.nfe400.classes.NFNotaInfoModalidadeFrete.valueOfCodigo("9"));
+            info.setTransporte(tr);
 
             nota.setInfo(info);
             NFLoteEnvio lote = new NFLoteEnvio();
@@ -125,4 +127,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T12:11:44.257Z
+// Sync: 2026-04-24T12:22:23.553Z
