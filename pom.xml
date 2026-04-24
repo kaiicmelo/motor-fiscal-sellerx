@@ -1,54 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.1.5</version>
-        <relativePath/>
-    </parent>
-    <groupId>com.sellerx</groupId>
-    <artifactId>motor-fiscal</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>motor-fiscal</name>
-    <description>Motor Fiscal Independente SellerX</description>
-    <properties>
-        <java.version>17</java.version>
-    </properties>
+    <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.1.5</version></parent>
+    <groupId>com.sellerx</groupId><artifactId>motor-fiscal</artifactId><version>0.0.1-SNAPSHOT</version>
     <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.github.wmixvideo</groupId>
-            <artifactId>nfe</artifactId>
-            <version>5.0.48</version>
-        </dependency>
-        <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
-        </dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>com.github.wmixvideo</groupId><artifactId>nfe</artifactId><version>5.0.48</version></dependency>
     </dependencies>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-    <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-    </repositories>
+    <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+    <repositories><repository><id>jitpack.io</id><url>https://jitpack.io</url></repository></repositories>
 </project>
-<!-- Sync: 2026-04-24T11:18:21.600Z -->
+<!-- Sync: 2026-04-24T11:26:16.361Z -->
