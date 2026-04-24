@@ -31,8 +31,7 @@ public class NfeController {
             Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            String num = String.valueOf(invoice.get("numero"));
-            String numeroNota = (invoice.get("numero") == null || num.equals("null") || num.trim().isEmpty()) ? "1" : num;
+            String numeroNota = (invoice.get("numero") == null || String.valueOf(invoice.get("numero")).equals("null")) ? "1" : String.valueOf(invoice.get("numero"));
 
             URL url = new URL((String) company.get("certificate_file_uri"));
             String certPass = (String) company.get("certificate_password");
@@ -72,7 +71,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.2");
+            ide.setVersaoEmissor("1.1.4");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
@@ -124,7 +123,7 @@ public class NfeController {
             info.setTransporte(tr); nota.setInfo(info);
             WSFacade ws = new WSFacade(config);
             NFLoteEnvio l = new NFLoteEnvio(); l.setNotas(Collections.singletonList(nota)); l.setIdLote("1"); l.setVersao("4.00");
-            NFLoteEnvioRet res = ws.enviaLote(l);
+            NFLoteEnvioRetorno res = ws.enviaLote(l);
             return ResponseEntity.ok(Map.of("status", res.getStatus(), "motivo", res.getMotivo() != null ? res.getMotivo() : "OK"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("erro", e.getMessage()));
