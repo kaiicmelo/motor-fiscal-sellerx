@@ -127,4 +127,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Sync: 2026-04-24T11:26:16.361Z
+// Sync: 2026-04-24T11:32:53.213Z
