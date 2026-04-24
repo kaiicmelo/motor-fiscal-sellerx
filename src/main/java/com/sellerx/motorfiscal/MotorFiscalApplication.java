@@ -1,12 +1,2 @@
-package com.sellerx.motorfiscal;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class MotorFiscalApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(MotorFiscalApplication.class, args);
-    }
-}
-// Sync: 2026-04-24T11:18:21.600Z
+package com.sellerx.motorfiscal; import org.springframework.boot.SpringApplication; import org.springframework.boot.autoconfigure.SpringBootApplication; @SpringBootApplication public class MotorFiscalApplication { public static void main(String[] args) { SpringApplication.run(MotorFiscalApplication.class, args); } }
+// Sync: 2026-04-24T11:26:16.361Z
