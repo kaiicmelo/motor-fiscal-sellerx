@@ -2,6 +2,6 @@ FROM maven:3.8.5-openjdk-17 AS build
 COPY . /app
 WORKDIR /app
 RUN mvn clean package -DskipTests
-FROM eclipse-temurin:17-jre-focal
-COPY --from=build /app/target/motor-fiscal-1.1.2.jar app.jar
+FROM eclipse-temurin:17-jre-jammy
+COPY --from=build /app/target/motor-fiscal-1.1.4.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
