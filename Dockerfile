@@ -3,5 +3,5 @@ COPY . /app
 WORKDIR /app
 RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-jammy
-COPY --from=build /app/target/motor-fiscal-1.1.4.jar app.jar
+COPY --from=build /app/target/motor-fiscal-1.1.5.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
