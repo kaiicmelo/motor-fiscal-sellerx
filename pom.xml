@@ -10,3 +10,4 @@
     <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
     <repositories><repository><id>jitpack.io</id><url>https://jitpack.io</url></repository></repositories>
 </project>
+<!-- Sync: 2026-04-24T14:50:12.800Z -->
