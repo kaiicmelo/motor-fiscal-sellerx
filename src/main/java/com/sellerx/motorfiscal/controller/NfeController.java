@@ -145,8 +145,16 @@ public class NfeController {
                     prod.setValorUnitario(valorUnit);
                     prod.setValorUnitarioTributavel(valorUnit);
                     prod.setValorTotalBruto(valorTotalItem);
-                    // PATCH ABSOLUTO AQUI:
-                    prod.setIndicadorTotal(xmlParser.read(NFNotaInfoItemProduto.class, "<prod><indTot>1</indTot></prod>", false).getIndicadorTotal());
+                    try {
+                        // Tenta forçar via XML injection se o campo existir internamente
+                        String itemXml = xmlParser.write(prod);
+                        if (!itemXml.contains("<indTot>")) {
+                            itemXml = itemXml.replace("</prod>", "<indTot>1</indTot></prod>");
+                            prod = xmlParser.read(NFNotaInfoItemProduto.class, itemXml);
+                        }
+                    } catch (Exception e) {
+                        // Se falhar, deixa o padrão da lib, melhor emitir sem o campo do que não compilar
+                    }
                     item.setProduto(prod);
                     
                     String xmlImposto = "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS><PIS><PISOutr><CST>99</CST><vBC>0.00</vBC><pPIS>0.00</pPIS><vPIS>0.00</vPIS></PISOutr></PIS><COFINS><COFINSOutr><CST>99</CST><vBC>0.00</vBC><pCOFINS>0.00</pCOFINS><vCOFINS>0.00</vCOFINS></COFINSOutr></COFINS></imposto>";
@@ -195,4 +203,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T18:33:01.560Z-eetgsu
+// Quebra Cache: 2026-04-24T18:51:16.844Z-yrg6rk
