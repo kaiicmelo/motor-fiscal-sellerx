@@ -2,11 +2,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.1.5</version></parent>
-    <groupId>com.sellerx</groupId><artifactId>motor-fiscal</artifactId><version>1.0.6-FINAL</version>
+    <groupId>com.sellerx</groupId><artifactId>motor-fiscal</artifactId><version>1.0.7-FINAL</version>
     <dependencies>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
         <dependency><groupId>com.github.wmixvideo</groupId><artifactId>nfe</artifactId><version>5.0.48</version></dependency>
-        <dependency><groupId>org.simpleframework</groupId><artifactId>simple-xml</artifactId><version>2.7.1</version></dependency>
     </dependencies>
     <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
     <repositories><repository><id>jitpack.io</id><url>https://jitpack.io</url></repository></repositories>
