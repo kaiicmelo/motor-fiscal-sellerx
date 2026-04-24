@@ -31,7 +31,8 @@ public class NfeController {
             Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            String numeroNota = (invoice.get("numero") == null || String.valueOf(invoice.get("numero")).equals("null")) ? "1" : String.valueOf(invoice.get("numero"));
+            String num = String.valueOf(invoice.get("numero"));
+            String numeroNota = (invoice.get("numero") == null || num.equals("null") || num.trim().isEmpty()) ? "1" : num;
 
             URL url = new URL((String) company.get("certificate_file_uri"));
             String certPass = (String) company.get("certificate_password");
@@ -71,7 +72,7 @@ public class NfeController {
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.valueOfCodigo("2"));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.0");
+            ide.setVersaoEmissor("1.1.2");
             info.setIdentificacao(ide);
 
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
