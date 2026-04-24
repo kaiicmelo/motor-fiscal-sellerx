@@ -5,4 +5,4 @@ RUN mvn clean package -DskipTests
 FROM openjdk:17.0.1-jdk-slim
 COPY --from=build /app/target/motor-fiscal-1.0.5-FINAL.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]
-# Quebra Cache: 2026-04-24T18:26:53.224Z-rx3jth
+# Quebra Cache: 2026-04-24T18:27:07.523Z-of9su8
