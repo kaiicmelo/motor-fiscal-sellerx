@@ -1,5 +1,4 @@
 [build]
 builder = "DOCKERFILE"
-
 [deploy]
 healthcheckPath = "/api/nfe/process"
