@@ -24,7 +24,7 @@ import org.simpleframework.xml.core.Persister;
 
 @RestController
 @RequestMapping("/api/nfe")
-@CrossOrigin("https://motor-fiscal-sellerx.onrender.com")
+@CrossOrigin("*")
 public class NfeController {
 
     @PostMapping("/process")
@@ -200,4 +200,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T17:36:59.462Z-p5p7p4
+// Quebra Cache: 2026-04-24T17:38:07.713Z-3h6jdd
