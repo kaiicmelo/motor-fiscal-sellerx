@@ -33,20 +33,36 @@ public class NfeController {
             String action = (String) payload.get("action");
             if ("ping".equals(action)) return ResponseEntity.ok(Map.of("status", "online"));
 
+            // Diagnóstico de entrada: Garante que os dados chegaram
+            if (payload == null || payload.get("company") == null) {
+                return ResponseEntity.badRequest().body(Map.of("erro", "Payload ou dados da empresa ausentes"));
+            }
+
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
             @SuppressWarnings("unchecked") Map<String, Object> invoice = (Map<String, Object>) payload.get("invoice");
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
+            // 1. CARREGAMENTO DO CERTIFICADO (Ponto crítico)
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
             
-            URL url = new URL(certUri);
             byte[] pfx;
-            try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
+            try {
+                URL url = new URL(certUri);
+                try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
+            } catch (Exception e) {
+                return ResponseEntity.status(500).body(Map.of("erro", "Falha ao baixar certificado: " + e.getMessage()));
+            }
 
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            try {
+                ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
+            } catch (Exception e) {
+                return ResponseEntity.status(401).body(Map.of("erro", "Senha do certificado incorreta ou arquivo inválido."));
+            }
+
+            // 2. CONFIGURAÇÃO (Blindada)
             NFeConfig config = new NFeConfig() {
                 @Override public DFUnidadeFederativa getCUF() { return DFUnidadeFederativa.valueOfCodigo(String.valueOf(company.getOrDefault("uf_codigo", "35"))); }
                 @Override public DFAmbiente getAmbiente() { return "PRODUCAO".equals(company.get("ambiente")) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO; }
@@ -191,17 +207,30 @@ public class NfeController {
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            return ResponseEntity.ok(Map.of(
-                "status", res.getRetorno().getStatus(),
-                "motivo", res.getRetorno().getMotivo(),
-                "recibo", res.getRetorno().getInfoRecebimento() != null ? res.getRetorno().getInfoRecebimento().getRecibo() : ""
-            ));
+            // RETORNO PRECISO: Extrai o erro real do SEFAZ
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", res.getRetorno().getStatus()); // Ex: 100, 204, 702
+            response.put("motivo", res.getRetorno().getMotivo()); // Ex: Rejeição: NFC-e com Data-Hora de emissão atrasada
+            
+            if (res.getRetorno().getInfoRecebimento() != null) {
+                response.put("recibo", res.getRetorno().getInfoRecebimento().getRecibo());
+            }
 
-        } catch (Exception e) { 
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage(), "status", "Motor Error")); 
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            // GERADOR DE ERRO PRECISO
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            String stackTrace = sw.toString();
+            
+            return ResponseEntity.status(500).body(Map.of(
+                "erro", e.getMessage() != null ? e.getMessage() : "Erro desconhecido no Motor Fiscal",
+                "detalhes", stackTrace.substring(0, Math.min(stackTrace.length(), 500)), // Manda os primeiros 500 caracteres do erro real
+                "origem", "MotorFiscal-InternalError"
+            ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:04:58.996Z-7b00n
+// Quebra Cache: 2026-04-24T19:18:19.801Z-g0425j
