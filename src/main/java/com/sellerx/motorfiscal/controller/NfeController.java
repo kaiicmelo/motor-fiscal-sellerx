@@ -4,6 +4,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.net.URL;
 import java.security.KeyStore;
 import java.util.*;
@@ -29,24 +31,26 @@ public class NfeController {
 
     @PostMapping("/process")
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
-        String numNotaLog = "0";
+        String numNotaLog = "N/A";
         try {
-            if (payload == null || payload.get("company") == null) {
-                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto recebido pelo Motor"));
-            }
-
+            // 1. VALIDAÇÃO DE SEGURANÇA (Evita o Erro 500 genérico)
+            if (payload == null) return ResponseEntity.badRequest().body(Map.of("erro", "Payload nulo"));
+            
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
             @SuppressWarnings("unchecked") Map<String, Object> invoice = (Map<String, Object>) payload.get("invoice");
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
+            if (company == null || invoice == null || customer == null || items == null) {
+                return ResponseEntity.badRequest().body(Map.of("erro", "Dados incompletos. Certifique-se de enviar company, invoice, customer e items."));
+            }
+
             numNotaLog = String.valueOf(invoice.getOrDefault("numero", "0"));
 
-            // 1. VALIDAÇÃO DO CERTIFICADO
+            // 2. CARREGAMENTO DO CERTIFICADO
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
-            if (certUri == null || certPass == null) throw new Exception("Dados do certificado ausentes (URI/Senha)");
-
+            
             URL url = new URL(certUri);
             byte[] pfx;
             try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
@@ -63,11 +67,11 @@ public class NfeController {
                 @Override public String getCadeiaCertificadosSenha() { return certPass; }
             };
 
+            // 3. MONTAGEM DA NOTA
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
-            // IDE
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -88,7 +92,6 @@ public class NfeController {
             ide.setVersaoEmissor("1.0.5");
             info.setIdentificacao(ide);
 
-            // EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
@@ -96,7 +99,6 @@ public class NfeController {
             emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
             info.setEmitente(emit);
 
-            // DESTINATARIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             String docDest = String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "");
             if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
@@ -152,34 +154,33 @@ public class NfeController {
 
             nota.setInfo(info);
             
+            // 4. TRANSMISSÃO
             NFLoteEnvio lote = new NFLoteEnvio();
             lote.setNotas(Collections.singletonList(nota));
             lote.setIdLote("1");
             lote.setVersao("4.00");
 
-            // TRANSMISSÃO COM TRAVA DE NULIDADE
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            if (res == null || res.getRetorno() == null) {
-                throw new Exception("SEFAZ não retornou resposta (Possível erro de SSL ou Timeout)");
-            }
+            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ não respondeu.");
 
             return ResponseEntity.ok(Map.of(
                 "status", res.getRetorno().getStatus(),
-                "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "Sem motivo detalhado",
+                "motivo", res.getRetorno().getMotivo() != null ? res.getRetorno().getMotivo() : "Processado",
                 "numero_nota", numNotaLog
             ));
 
         } catch (Exception e) {
-            String causa = e.getCause() != null ? e.getCause().getMessage() : "Nenhuma causa raiz detectada";
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
             return ResponseEntity.status(500).body(Map.of(
-                "erro", e.getMessage() != null ? e.getMessage() : "Erro Interno no Motor",
-                "causa", causa,
+                "erro", e.getMessage() != null ? e.getMessage() : "Erro interno",
+                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 300)),
                 "numero_nota", numNotaLog
             ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:29:00.337Z-zduz39
+// Quebra Cache: 2026-04-24T19:38:11.702Z-vm6hlg
