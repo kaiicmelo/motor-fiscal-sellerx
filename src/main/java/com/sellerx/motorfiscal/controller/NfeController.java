@@ -34,7 +34,7 @@ public class NfeController {
         String numNotaLog = "0";
         try {
             if (payload == null || payload.get("company") == null) {
-                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto"));
+                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto recebido"));
             }
 
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
@@ -42,8 +42,9 @@ public class NfeController {
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            numNotaLog = String.valueOf(invoice.getOrDefault("numero", "0"));
+            numNotaLog = String.valueOf(invoice != null ? invoice.getOrDefault("numero", "0") : "0");
 
+            // 1. CERTIFICADO
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
             URL url = new URL(certUri);
@@ -66,6 +67,7 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
+            // IDENTIFICAÇÃO (IDE)
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -86,6 +88,7 @@ public class NfeController {
             ide.setVersaoEmissor("1.0.5");
             info.setIdentificacao(ide);
 
+            // EMITENTE E DESTINATÁRIO
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
@@ -100,6 +103,7 @@ public class NfeController {
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
 
+            // ITENS
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
@@ -131,17 +135,16 @@ public class NfeController {
             }
             info.setItens(listaItens);
 
-            // CORREÇÃO DO TOTAL (INJEÇÃO XML PARA EVITAR ERRO DE MÉTODO)
+            // TOTAIS E PAGAMENTO (Injeção via XML para compatibilidade absoluta entre versões)
             String xmlTotStr = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos + "</vNF></ICMSTot></total>";
             info.setTotal(xmlParser.read(NFNotaInfoTotal.class, xmlTotStr));
 
-            // CORREÇÃO DO PAGAMENTO
             String xmlPagStr = "<pag><detPag><tPag>01</tPag><vPag>" + totalProdutos + "</vPag></detPag></pag>";
             info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, xmlPagStr));
 
-            // CORREÇÃO DO TRANSPORTE
+            // TRANSPORTE (Solução definitiva usando valueOfCodigo)
             NFNotaInfoTransporte transp = new NFNotaInfoTransporte();
-            transp.setModalidadeFrete(NFModalidadeFrete.SEM_OCORRENCIA_DE_TRANSPORTE);
+            transp.setModalidadeFrete(NFModalidadeFrete.valueOfCodigo("9"));
             info.setTransporte(transp);
 
             nota.setInfo(info);
@@ -154,7 +157,7 @@ public class NfeController {
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ sem resposta.");
+            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ sem resposta (Timeout ou SSL)");
 
             return ResponseEntity.ok(Map.of(
                 "status", res.getRetorno().getStatus(),
@@ -166,12 +169,12 @@ public class NfeController {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             return ResponseEntity.status(500).body(Map.of(
-                "erro", e.getMessage() != null ? e.getMessage() : "Erro Interno",
-                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 400)),
+                "erro", e.getMessage() != null ? e.getMessage() : "Erro desconhecido",
+                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 500)),
                 "nota", numNotaLog
             ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:46:12.025Z-p63ude
+// Quebra Cache: 2026-04-24T19:53:38.158Z-qlyo2d
