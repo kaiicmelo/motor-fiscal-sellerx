@@ -33,8 +33,9 @@ public class NfeController {
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
         String numNotaLog = "0";
         try {
-            if (payload == null || payload.get("company") == null) {
-                return ResponseEntity.badRequest().body(Map.of("erro", "Payload incompleto recebido"));
+            // 1. VALIDAÇÃO DE PAYLOAD (Garante que não venha null do ERP)
+            if (payload == null || payload.get("company") == null || payload.get("invoice") == null) {
+                return ResponseEntity.badRequest().body(Map.of("erro", "Payload ou objetos internos (company/invoice) estão nulos. Verifique o envio do seu ERP."));
             }
 
             @SuppressWarnings("unchecked") Map<String, Object> company = (Map<String, Object>) payload.get("company");
@@ -42,11 +43,13 @@ public class NfeController {
             @SuppressWarnings("unchecked") Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
             @SuppressWarnings("unchecked") List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
 
-            numNotaLog = String.valueOf(invoice != null ? invoice.getOrDefault("numero", "0") : "0");
+            numNotaLog = invoice.get("numero") != null ? String.valueOf(invoice.get("numero")) : "0";
 
-            // 1. CERTIFICADO
+            // 2. CERTIFICADO COM TIMEOUT
             String certUri = (String) company.get("certificate_file_uri");
             String certPass = (String) company.get("certificate_password");
+            if (certUri == null || certPass == null) throw new Exception("Dados do certificado (URI ou Senha) não foram enviados.");
+
             URL url = new URL(certUri);
             byte[] pfx;
             try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
@@ -67,7 +70,7 @@ public class NfeController {
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
-            // IDENTIFICAÇÃO (IDE)
+            // IDE
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(config.getCUF());
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -88,7 +91,7 @@ public class NfeController {
             ide.setVersaoEmissor("1.0.5");
             info.setIdentificacao(ide);
 
-            // EMITENTE E DESTINATÁRIO
+            // EMITENTE
             NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
             emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
             emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
@@ -96,14 +99,15 @@ public class NfeController {
             emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
             info.setEmitente(emit);
 
+            // DESTINATARIO
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
-            String docDest = String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "");
-            if(docDest.length() > 11) dest.setCnpj(docDest); else dest.setCpf(docDest);
-            dest.setRazaoSocial(String.valueOf(customer.get("nome")));
+            String docDest = customer.get("documento") != null ? String.valueOf(customer.get("documento")).replaceAll("[^0-9]", "") : "";
+            if(docDest.length() > 11) dest.setCnpj(docDest); else if(!docDest.isEmpty()) dest.setCpf(docDest);
+            dest.setRazaoSocial(String.valueOf(customer.getOrDefault("nome", "CONSUMIDOR FINAL")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
             info.setDestinatario(dest);
 
-            // ITENS
+            // ITENS (Proteção contra valores nulos nas contas)
             List<NFNotaInfoItem> listaItens = new ArrayList<>();
             BigDecimal totalProdutos = BigDecimal.ZERO;
             int ordem = 1;
@@ -112,16 +116,18 @@ public class NfeController {
                 NFNotaInfoItem item = new NFNotaInfoItem();
                 item.setNumeroItem(ordem++);
                 NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
-                prod.setCodigo(String.valueOf(itemData.get("codigo")));
-                prod.setDescricao(String.valueOf(itemData.get("descricao")));
-                prod.setNcm(String.valueOf(itemData.get("ncm")));
-                prod.setCfop(String.valueOf(itemData.get("cfop")));
+                prod.setCodigo(String.valueOf(itemData.getOrDefault("codigo", "0")));
+                prod.setDescricao(String.valueOf(itemData.getOrDefault("descricao", "PRODUTO SEM DESCRICAO")));
+                prod.setNcm(String.valueOf(itemData.getOrDefault("ncm", "")));
+                prod.setCfop(String.valueOf(itemData.getOrDefault("cfop", "5102")));
                 prod.setUnidadeComercial("UN");
                 prod.setUnidadeTributavel("UN");
-                BigDecimal qtd = new BigDecimal(String.valueOf(itemData.get("quantidade")));
-                BigDecimal vUnit = new BigDecimal(String.valueOf(itemData.get("valor_unitario")));
+                
+                BigDecimal qtd = new BigDecimal(String.valueOf(itemData.getOrDefault("quantidade", "1")));
+                BigDecimal vUnit = new BigDecimal(String.valueOf(itemData.getOrDefault("valor_unitario", "0.00")));
                 BigDecimal vTotal = qtd.multiply(vUnit).setScale(2, RoundingMode.HALF_UP);
                 totalProdutos = totalProdutos.add(vTotal);
+                
                 prod.setQuantidadeComercial(qtd);
                 prod.setQuantidadeTributavel(qtd);
                 prod.setValorUnitario(vUnit);
@@ -135,14 +141,13 @@ public class NfeController {
             }
             info.setItens(listaItens);
 
-            // TOTAIS E PAGAMENTO (Injeção via XML para compatibilidade absoluta entre versões)
+            // TOTAIS, PAGAMENTO E TRANSPORTE (Usando códigos fixos para evitar quebra de lib)
             String xmlTotStr = "<total><ICMSTot><vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson><vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST><vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet><vProd>" + totalProdutos + "</vProd><vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc><vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro><vNF>" + totalProdutos + "</vNF></ICMSTot></total>";
             info.setTotal(xmlParser.read(NFNotaInfoTotal.class, xmlTotStr));
 
             String xmlPagStr = "<pag><detPag><tPag>01</tPag><vPag>" + totalProdutos + "</vPag></detPag></pag>";
             info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, xmlPagStr));
 
-            // TRANSPORTE (Solução definitiva usando valueOfCodigo)
             NFNotaInfoTransporte transp = new NFNotaInfoTransporte();
             transp.setModalidadeFrete(NFModalidadeFrete.valueOfCodigo("9"));
             info.setTransporte(transp);
@@ -157,7 +162,7 @@ public class NfeController {
             WSFacade ws = new WSFacade(config);
             NFLoteEnvioRetornoDados res = ws.enviaLote(lote);
             
-            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ sem resposta (Timeout ou SSL)");
+            if (res == null || res.getRetorno() == null) throw new Exception("SEFAZ não retornou resposta (Timeout ou erro de rede)");
 
             return ResponseEntity.ok(Map.of(
                 "status", res.getRetorno().getStatus(),
@@ -168,13 +173,14 @@ public class NfeController {
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
+            String fullError = sw.toString();
             return ResponseEntity.status(500).body(Map.of(
                 "erro", e.getMessage() != null ? e.getMessage() : "Erro desconhecido",
-                "detalhes", sw.toString().substring(0, Math.min(sw.toString().length(), 500)),
+                "detalhes", fullError.substring(0, Math.min(fullError.length(), 600)),
                 "nota", numNotaLog
             ));
         }
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Quebra Cache: 2026-04-24T19:53:38.158Z-qlyo2d
+// Quebra Cache: 2026-04-24T20:02:26.176Z-5glz8
