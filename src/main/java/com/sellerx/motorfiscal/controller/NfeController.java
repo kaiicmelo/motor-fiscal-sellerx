@@ -177,4 +177,4 @@ public class NfeController {
     }
     @GetMapping("/process") public ResponseEntity<?> ping() { return ResponseEntity.ok(Map.of("status", "online")); }
 }
-// Cache: 1777063093333
+// Cache: 1777063107798
