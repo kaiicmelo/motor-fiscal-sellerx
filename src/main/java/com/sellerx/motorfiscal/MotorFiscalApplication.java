@@ -1,2 +1,2 @@
 package com.sellerx.motorfiscal; import org.springframework.boot.SpringApplication; import org.springframework.boot.autoconfigure.SpringBootApplication; @SpringBootApplication public class MotorFiscalApplication { public static void main(String[] args) { SpringApplication.run(MotorFiscalApplication.class, args); } }
-// Quebra Cache: 2026-04-24T19:04:58.996Z-7b00n
+// Quebra Cache: 2026-04-24T19:18:19.801Z-g0425j
