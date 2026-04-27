@@ -10,6 +10,7 @@ import com.fincatto.documentofiscal.nfe400.classes.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.webservices.WSFacade;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
@@ -26,6 +27,21 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/nfe")
 public class NfeController {
+
+    @GetMapping("/")
+    public ResponseEntity<Map<String, String>> root() {
+        Map<String, String> body = new HashMap<>();
+        body.put("status", "ok");
+        body.put("service", "motor-fiscal");
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        Map<String, String> body = new HashMap<>();
+        body.put("status", "UP");
+        return ResponseEntity.ok(body);
+    }
 
     @PostMapping("/process")
     @SuppressWarnings("unchecked")
