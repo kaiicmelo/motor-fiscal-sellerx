@@ -19,11 +19,31 @@ import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
+import org.simpleframework.xml.core.Persister;
 
 @RestController
 @RequestMapping("/api/nfe")
 @CrossOrigin("*")
 public class NfeController {
+
+    // Mapa estático sigla -> codigo IBGE da UF (resolve falta de valueOfSigla)
+    private static final Map<String, String> UF_CODIGO = new HashMap<>();
+    static {
+        UF_CODIGO.put("AC","12"); UF_CODIGO.put("AL","27"); UF_CODIGO.put("AP","16");
+        UF_CODIGO.put("AM","13"); UF_CODIGO.put("BA","29"); UF_CODIGO.put("CE","23");
+        UF_CODIGO.put("DF","53"); UF_CODIGO.put("ES","32"); UF_CODIGO.put("GO","52");
+        UF_CODIGO.put("MA","21"); UF_CODIGO.put("MT","51"); UF_CODIGO.put("MS","50");
+        UF_CODIGO.put("MG","31"); UF_CODIGO.put("PA","15"); UF_CODIGO.put("PB","25");
+        UF_CODIGO.put("PR","41"); UF_CODIGO.put("PE","26"); UF_CODIGO.put("PI","22");
+        UF_CODIGO.put("RJ","33"); UF_CODIGO.put("RN","24"); UF_CODIGO.put("RS","43");
+        UF_CODIGO.put("RO","11"); UF_CODIGO.put("RR","14"); UF_CODIGO.put("SC","42");
+        UF_CODIGO.put("SP","35"); UF_CODIGO.put("SE","28"); UF_CODIGO.put("TO","17");
+    }
+
+    private static DFUnidadeFederativa ufBySigla(String sigla) {
+        String codigo = UF_CODIGO.getOrDefault(sigla.toUpperCase(), "35");
+        return DFUnidadeFederativa.valueOfCodigo(codigo);
+    }
 
     @PostMapping("/process")
     public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
@@ -44,9 +64,9 @@ public class NfeController {
             KeyStore ks = KeyStore.getInstance("PKCS12");
             ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
 
-            // ====== UF dinâmica ======
+            // ====== UF dinamica ======
             String ufSigla = String.valueOf(company.getOrDefault("uf", "SP"));
-            DFUnidadeFederativa ufEnum = DFUnidadeFederativa.valueOfSigla(ufSigla);
+            DFUnidadeFederativa ufEnum = ufBySigla(ufSigla);
 
             NFeConfig config = new NFeConfig() {
                 @Override public DFUnidadeFederativa getCUF() { return ufEnum; }
@@ -59,12 +79,12 @@ public class NfeController {
                 @Override public String   getCadeiaCertificadosSenha()    { return certPass; }
             };
 
-            // ====== NOTA ======
+            Persister xmlParser = new Persister();
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
             info.setVersao(new BigDecimal("4.00"));
 
-            // ---- Identificação ----
+            // ---- Identificacao ----
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
             ide.setUf(ufEnum);
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
@@ -86,22 +106,13 @@ public class NfeController {
                 company.getOrDefault("codigo_municipio", "3516200"))));
 
             ide.setTipoImpressao(NFTipoImpressao.DANFE_NORMAL_RETRATO);
-
-            // Finalidade dinâmica (1=Normal, 4=Devolução)
-            String finalidade = String.valueOf(invoice.getOrDefault("finalidade", "1"));
-            switch (finalidade) {
-                case "2": ide.setFinalidade(NFFinalidade.COMPLEMENTAR); break;
-                case "3": ide.setFinalidade(NFFinalidade.AJUSTE); break;
-                case "4": ide.setFinalidade(NFFinalidade.DEVOLUCAO); break;
-                default:  ide.setFinalidade(NFFinalidade.NORMAL);
-            }
-
+            ide.setFinalidade(NFFinalidade.NORMAL);
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
             ide.setIndicadorPresencaComprador(
                 NFIndicadorPresencaComprador.valueOfCodigo(
                     String.valueOf(invoice.getOrDefault("indicador_presenca", "2"))));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.8");
+            ide.setVersaoEmissor("1.1.9");
             info.setIdentificacao(ide);
 
             // ---- Emitente ----
@@ -111,10 +122,9 @@ public class NfeController {
             emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")).replaceAll("[^0-9]", ""));
             emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
 
-            // Endereço Emitente
             Map<String, Object> endEmit = (Map<String, Object>) company.getOrDefault("endereco", new HashMap<>());
             NFEndereco endE = new NFEndereco();
-            endE.setUf(DFUnidadeFederativa.valueOfSigla(String.valueOf(endEmit.getOrDefault("uf", ufSigla))));
+            endE.setUf(ufBySigla(String.valueOf(endEmit.getOrDefault("uf", ufSigla))));
             endE.setCodigoMunicipio(String.valueOf(endEmit.getOrDefault("codigo_municipio", "3516200")));
             endE.setDescricaoMunicipio(String.valueOf(endEmit.getOrDefault("municipio", "FRANCA")));
             endE.setLogradouro(String.valueOf(endEmit.getOrDefault("logradouro", "RUA SEM NOME")));
@@ -126,17 +136,16 @@ public class NfeController {
             emit.setEndereco(endE);
             info.setEmitente(emit);
 
-            // ---- Destinatário ----
+            // ---- Destinatario ----
             NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
             String doc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
             if (doc.length() > 11) dest.setCnpj(doc); else dest.setCpf(doc);
             dest.setRazaoSocial(String.valueOf(customer.get("nome")));
             dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
 
-            // Endereço Destinatário
             Map<String, Object> endDest = (Map<String, Object>) customer.getOrDefault("endereco", new HashMap<>());
             NFEndereco endD = new NFEndereco();
-            endD.setUf(DFUnidadeFederativa.valueOfSigla(String.valueOf(endDest.getOrDefault("uf", "SP"))));
+            endD.setUf(ufBySigla(String.valueOf(endDest.getOrDefault("uf", "SP"))));
             endD.setCodigoMunicipio(String.valueOf(endDest.getOrDefault("codigo_municipio", "3550308")));
             endD.setDescricaoMunicipio(String.valueOf(endDest.getOrDefault("municipio", "SAO PAULO")));
             endD.setLogradouro(String.valueOf(endDest.getOrDefault("logradouro", "RUA SEM NOME")));
@@ -175,82 +184,60 @@ public class NfeController {
                 p.setValorUnitario(v);
                 p.setValorUnitarioTributavel(v);
                 p.setValorTotalBruto(t);
-                p.setProdutoCompoeValorNota(true);
                 item.setProduto(p);
 
-                // ============ IMPOSTOS — INSTANCIAÇÃO CORRETA ============
-                NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
-                imp.setValorTotalTributos(new BigDecimal("0.00"));
+                // Imposto via XML (compatibilidade com Fincatto 5.0.48)
+                // origem=0 (Nacional) - parser do Fincatto resolve corretamente quando vem via XML
+                String impostoXml =
+                    "<imposto>" +
+                      "<ICMS>" +
+                        "<ICMSSN102>" +
+                          "<orig>0</orig>" +
+                          "<CSOSN>102</CSOSN>" +
+                        "</ICMSSN102>" +
+                      "</ICMS>" +
+                      "<PIS>" +
+                        "<PISOutr>" +
+                          "<CST>49</CST>" +
+                          "<vBC>0.00</vBC>" +
+                          "<pPIS>0.00</pPIS>" +
+                          "<vPIS>0.00</vPIS>" +
+                        "</PISOutr>" +
+                      "</PIS>" +
+                      "<COFINS>" +
+                        "<COFINSOutr>" +
+                          "<CST>49</CST>" +
+                          "<vBC>0.00</vBC>" +
+                          "<pCOFINS>0.00</pCOFINS>" +
+                          "<vCOFINS>0.00</vCOFINS>" +
+                        "</COFINSOutr>" +
+                      "</COFINS>" +
+                    "</imposto>";
 
-                // ICMS Simples Nacional CSOSN 102
-                NFNotaInfoItemImpostoICMSSN102 sn102 = new NFNotaInfoItemImpostoICMSSN102();
-                sn102.setOrigem(NFOrigem.NACIONAL);   // ✅ ENUM, não string "0"
-                sn102.setCodigoSituacaoOperacaoSimplesNacional(
-                    NFNotaInfoItemImpostoICMSSNCodigoSituacaoOperacao.SEM_PERMISSAO_DE_CREDITO);
-
-                NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
-                icms.setIcmssn102(sn102);
-                imp.setIcms(icms);
-
-                // PIS — CST 49 (outras operações)
-                NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
-                pisOutr.setSituacaoTributaria(NFNotaInfoItemImpostoPISSituacaoTributaria.OUTRAS_OPERACOES);
-                pisOutr.setValorBaseCalculo(new BigDecimal("0.00"));
-                pisOutr.setPercentualAliquota(new BigDecimal("0.00"));
-                pisOutr.setValor(new BigDecimal("0.00"));
-                NFNotaInfoItemImpostoPIS pis = new NFNotaInfoItemImpostoPIS();
-                pis.setPisOutrasOperacoes(pisOutr);
-                imp.setPis(pis);
-
-                // COFINS — CST 49 (outras operações)
-                NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
-                cofOutr.setSituacaoTributaria(NFNotaInfoItemImpostoCOFINSSituacaoTributaria.OUTRAS_OPERACOES);
-                cofOutr.setValorBaseCalculo(new BigDecimal("0.00"));
-                cofOutr.setPercentualAliquota(new BigDecimal("0.00"));
-                cofOutr.setValor(new BigDecimal("0.00"));
-                NFNotaInfoItemImpostoCOFINS cofins = new NFNotaInfoItemImpostoCOFINS();
-                cofins.setCofinsOutrasOperacoes(cofOutr);
-                imp.setCofins(cofins);
-
+                NFNotaInfoItemImposto imp = xmlParser.read(NFNotaInfoItemImposto.class, impostoXml);
                 item.setImposto(imp);
                 lista.add(item);
             }
             info.setItens(lista);
 
-            // ---- Totais ----
+            // ---- Totais via XML ----
             String vt = totalProd.setScale(2, RoundingMode.HALF_UP).toPlainString();
-            NFNotaInfoTotal total = new NFNotaInfoTotal();
-            NFNotaInfoICMSTotal icmsTot = new NFNotaInfoICMSTotal();
-            BigDecimal zero = new BigDecimal("0.00");
-            icmsTot.setBaseCalculoICMS(zero);
-            icmsTot.setValorTotalICMS(zero);
-            icmsTot.setValorICMSDesonerado(zero);
-            icmsTot.setValorTotalFCP(zero);
-            icmsTot.setBaseCalculoICMSST(zero);
-            icmsTot.setValorTotalICMSST(zero);
-            icmsTot.setValorTotalFCPST(zero);
-            icmsTot.setValorTotalFCPSTRetido(zero);
-            icmsTot.setValorTotalProdutosEServicos(totalProd);
-            icmsTot.setValorTotalFrete(zero);
-            icmsTot.setValorTotalSeguro(zero);
-            icmsTot.setValorTotalDesconto(zero);
-            icmsTot.setValorTotalII(zero);
-            icmsTot.setValorTotalIPI(zero);
-            icmsTot.setValorTotalIPIDevolvido(zero);
-            icmsTot.setValorPIS(zero);
-            icmsTot.setValorCOFINS(zero);
-            icmsTot.setOutrasDespesasAcessorias(zero);
-            icmsTot.setValorTotalNFe(totalProd);
-            total.setIcmsTotal(icmsTot);
-            info.setTotal(total);
+            String totalXml =
+                "<total><ICMSTot>" +
+                  "<vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson>" +
+                  "<vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST>" +
+                  "<vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet>" +
+                  "<vProd>" + vt + "</vProd>" +
+                  "<vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc>" +
+                  "<vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol>" +
+                  "<vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro>" +
+                  "<vNF>" + vt + "</vNF>" +
+                "</ICMSTot></total>";
+            info.setTotal(xmlParser.read(NFNotaInfoTotal.class, totalXml));
 
-            // ---- Pagamento ----
-            NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
-            NFNotaInfoPagamentoDetalhe detPag = new NFNotaInfoPagamentoDetalhe();
-            detPag.setMeioPagamento(NFNotaInfoPagamentoMeioPagamento.DINHEIRO);
-            detPag.setValorPagamento(totalProd);
-            pag.setPagamentoDetalhes(Collections.singletonList(detPag));
-            info.setPagamento(pag);
+            // ---- Pagamento via XML ----
+            String pagXml = "<pag><detPag><tPag>01</tPag><vPag>" + vt + "</vPag></detPag></pag>";
+            info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, pagXml));
 
             // ---- Transporte ----
             NFNotaInfoTransporte tr = new NFNotaInfoTransporte();
@@ -282,6 +269,6 @@ public class NfeController {
 
     @GetMapping("/process")
     public ResponseEntity<?> ping() {
-        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.8"));
+        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.9"));
     }
 }
