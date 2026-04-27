@@ -16,7 +16,7 @@ import com.fincatto.documentofiscal.DFModelo;
 import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.*;
-import com.fincatto.documentofiscal.nfe400.classes.NFSituacaoOperacaoSimplesNacional;
+import com.fincatto.documentofiscal.nfe400.classes.NFNotaSituacaoOperacaoSimplesNacional;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
 import org.simpleframework.xml.core.Persister;
 
@@ -114,8 +114,10 @@ public class NfeController {
                 NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
                 NFNotaInfoItemImpostoICMSSN102 s102 = new NFNotaInfoItemImpostoICMSSN102();
                 s102.setOrigem(NFOrigem.NACIONAL); 
-                // CORREÇÃO v1.1.7: Uso do Enum direto para evitar erro de símbolo
-                s102.setSituacaoOperacaoSN(NFSituacaoOperacaoSimplesNacional.SN_102);
+                
+                // CORREÇÃO v1.1.7: Import correto (NFNotaSituacao...) e uso do valueOfCodigo para evitar erros com nomes de Enum
+                s102.setSituacaoOperacaoSN(NFNotaSituacaoOperacaoSimplesNacional.valueOfCodigo("102"));
+                
                 icms.setIcmssn102(s102); imp.setIcms(icms);
                 item.setImposto(imp); lista.add(item);
             }
