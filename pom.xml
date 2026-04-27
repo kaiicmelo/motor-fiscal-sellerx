@@ -10,4 +10,5 @@
     </dependencies>
     <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
     <repositories><repository><id>jitpack.io</id><url>https://jitpack.io</url></repository></repositories>
+    <!-- Atualizacao Forcada 123 -->
 </project>
