@@ -112,7 +112,7 @@ public class NfeController {
                 NFIndicadorPresencaComprador.valueOfCodigo(
                     String.valueOf(invoice.getOrDefault("indicador_presenca", "2"))));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.12");
+            ide.setVersaoEmissor("1.1.14");
             info.setIdentificacao(ide);
 
             // ---- Emitente ----
@@ -193,12 +193,12 @@ public class NfeController {
                       "<ICMS>" +
                         "<ICMSSN102>" +
                           "<orig>NACIONAL</orig>" +
-                          "<CSOSN>SEM_PERMISSAO_DE_CREDITO</CSOSN>" +
+                          "<CSOSN>CSOSN_102</CSOSN>" +
                         "</ICMSSN102>" +
                       "</ICMS>" +
                       "<PIS>" +
                         "<PISOutr>" +
-                          "<CST>OUTRAS_OPERACOES_SAIDA</CST>" +
+                          "<CST>CST_49</CST>" +
                           "<vBC>0.00</vBC>" +
                           "<pPIS>0.00</pPIS>" +
                           "<vPIS>0.00</vPIS>" +
@@ -206,7 +206,7 @@ public class NfeController {
                       "</PIS>" +
                       "<COFINS>" +
                         "<COFINSOutr>" +
-                          "<CST>OUTRAS_OPERACOES_SAIDA</CST>" +
+                          "<CST>CST_49</CST>" +
                           "<vBC>0.00</vBC>" +
                           "<pCOFINS>0.00</pCOFINS>" +
                           "<vCOFINS>0.00</vCOFINS>" +
@@ -269,6 +269,6 @@ public class NfeController {
 
     @GetMapping("/process")
     public ResponseEntity<?> ping() {
-        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.12"));
+        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.14"));
     }
 }
