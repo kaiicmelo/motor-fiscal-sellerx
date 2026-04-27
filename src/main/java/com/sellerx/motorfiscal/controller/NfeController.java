@@ -258,12 +258,77 @@ public class NfeController {
         NFNotaInfoItemImposto imposto = new NFNotaInfoItemImposto();
 
         Map<String, Object> icmsData = (Map<String, Object>) data.get("icms");
-        String csosn = (String) icmsData.getOrDefault("cst", "102");
+        String csosn = String.valueOf(icmsData.getOrDefault("cst", "102")).trim();
+        NFOrigem origem = NFOrigem.valueOfCodigo(icmsData.getOrDefault("origem", "0").toString());
+
         NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
-        NFNotaInfoItemImpostoICMSSN102 icmsSN = new NFNotaInfoItemImpostoICMSSN102();
-        icmsSN.setOrigem(NFOrigem.valueOfCodigo(icmsData.getOrDefault("origem", "0").toString()));
-        icmsSN.setSituacaoOperacaoSN(NFNotaSituacaoOperacionalSimplesNacional.valueOfCodigo(csosn));
-        icms.setIcmssn102(icmsSN);
+
+        switch (csosn) {
+            case "101": {
+                NFNotaInfoItemImpostoICMSSN101 sn = new NFNotaInfoItemImpostoICMSSN101();
+                sn.setOrigem(origem);
+                sn.setValorCreditoICMSSN(BigDecimal.ZERO);
+                sn.setAliquotaAplicavelCalculoCreditoSN(BigDecimal.ZERO);
+                icms.setIcmssn101(sn);
+                break;
+            }
+            case "102":
+            case "103":
+            case "300":
+            case "400": {
+                NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
+                sn.setOrigem(origem);
+                // Para SN102/103/300/400 a Fincatto NÃO exige setSituacaoOperacaoSN —
+                // a classe já é específica para esses códigos
+                icms.setIcmssn102(sn);
+                break;
+            }
+            case "201": {
+                NFNotaInfoItemImpostoICMSSN201 sn = new NFNotaInfoItemImpostoICMSSN201();
+                sn.setOrigem(origem);
+                sn.setModalidadeBCICMSST(NFNotaInfoItemModalidadeBCICMSST.LISTA_NEGATIVA);
+                sn.setValorBCICMSST(BigDecimal.ZERO);
+                sn.setAliquotaImpostoICMSST(BigDecimal.ZERO);
+                sn.setValorICMSST(BigDecimal.ZERO);
+                sn.setValorCreditoICMSSN(BigDecimal.ZERO);
+                sn.setAliquotaAplicavelCalculoCreditoSN(BigDecimal.ZERO);
+                icms.setIcmssn201(sn);
+                break;
+            }
+            case "202":
+            case "203": {
+                NFNotaInfoItemImpostoICMSSN202 sn = new NFNotaInfoItemImpostoICMSSN202();
+                sn.setOrigem(origem);
+                sn.setModalidadeBCICMSST(NFNotaInfoItemModalidadeBCICMSST.LISTA_NEGATIVA);
+                sn.setValorBCICMSST(BigDecimal.ZERO);
+                sn.setAliquotaImpostoICMSST(BigDecimal.ZERO);
+                sn.setValorICMSST(BigDecimal.ZERO);
+                icms.setIcmssn202(sn);
+                break;
+            }
+            case "500": {
+                NFNotaInfoItemImpostoICMSSN500 sn = new NFNotaInfoItemImpostoICMSSN500();
+                sn.setOrigem(origem);
+                icms.setIcmssn500(sn);
+                break;
+            }
+            case "900": {
+                NFNotaInfoItemImpostoICMSSN900 sn = new NFNotaInfoItemImpostoICMSSN900();
+                sn.setOrigem(origem);
+                sn.setModalidadeBCICMS(NFNotaInfoItemModalidadeBCICMS.VALOR_OPERACAO);
+                sn.setValorBCICMS(BigDecimal.ZERO);
+                sn.setAliquotaICMS(BigDecimal.ZERO);
+                sn.setValorICMS(BigDecimal.ZERO);
+                icms.setIcmssn900(sn);
+                break;
+            }
+            default: {
+                // Fallback: trata como SN102 (mais comum no Simples Nacional)
+                NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
+                sn.setOrigem(origem);
+                icms.setIcmssn102(sn);
+            }
+        }
         imposto.setIcms(icms);
 
         NFNotaInfoItemImpostoPIS pis = new NFNotaInfoItemImpostoPIS();
