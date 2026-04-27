@@ -54,7 +54,7 @@ public class NfeController {
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
             ide.setNaturezaOperacao((String) invoiceData.getOrDefault("natureza_operacao", "Venda"));
             ide.setModelo(DFModelo.NFE);
-            ide.setSerie((String) invoiceData.get("serie"));
+            ide.setSerie(new BigDecimal((String) invoiceData.get("serie")));
             ide.setNumeroNota(String.format("%09d", Integer.parseInt((String) invoiceData.get("numero"))));
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipo(NFTipo.SAIDA);
@@ -67,8 +67,8 @@ public class NfeController {
             ide.setAmbiente(config.getAmbiente());
             ide.setFinalidade(NFFinalidade.NORMAL);
             ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.NAO);
-            ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.NAO_SE_APLICA);
-            ide.setProgramaEmissor(NFProcessoEmissor.APLICATIVO_CONTRIBUINTE);
+            ide.setIndicadorPresencaComprador(NFIndicadorPresencaComprador.NAO_APLICA);
+            ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
             ide.setVersaoEmissor("1.0");
             info.setIdentificacao(ide);
 
@@ -156,13 +156,17 @@ public class NfeController {
             @Override public String getCertificadoSenha() { return certPwd; }
             @Override public KeyStore getCertificadoKeyStore() { return keyStore; }
             @Override public String getCadeiaCertificadosSenha() { return "changeit"; }
-            @Override public KeyStore getCadeiaCertificadosKeyStore() throws Exception {
-                KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-                String javaHome = System.getProperty("java.home");
-                try (FileInputStream fis = new FileInputStream(javaHome + "/lib/security/cacerts")) {
-                    ks.load(fis, "changeit".toCharArray());
+            @Override public KeyStore getCadeiaCertificadosKeyStore() {
+                try {
+                    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+                    String javaHome = System.getProperty("java.home");
+                    try (FileInputStream fis = new FileInputStream(javaHome + "/lib/security/cacerts")) {
+                        ks.load(fis, "changeit".toCharArray());
+                    }
+                    return ks;
+                } catch (Exception e) {
+                    throw new RuntimeException("Erro ao carregar cacerts", e);
                 }
-                return ks;
             }
         };
     }
