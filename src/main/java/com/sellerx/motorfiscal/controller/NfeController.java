@@ -40,7 +40,6 @@ public class NfeController {
     public ResponseEntity<Map<String, String>> health() {
         Map<String, String> body = new HashMap<>();
         body.put("status", "UP");
-        body.put("timestamp", String.valueOf(System.currentTimeMillis()));
         return ResponseEntity.ok(body);
     }
 
@@ -328,7 +327,7 @@ public class NfeController {
         NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
         pisOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("49"));
         pisOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        pisOutr.setPercentualPIS(BigDecimal.ZERO);
+        pisOutr.setPercentualAliquota(BigDecimal.ZERO);
         pisOutr.setValorTributo(BigDecimal.ZERO);
         pis.setOutrasOperacoes(pisOutr);
         imposto.setPis(pis);
@@ -337,7 +336,7 @@ public class NfeController {
         NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofinsOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
         cofinsOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("49"));
         cofinsOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        cofinsOutr.setPercentualCOFINS(BigDecimal.ZERO);
+        cofinsOutr.setPercentualAliquota(BigDecimal.ZERO);
         cofinsOutr.setValorCOFINS(BigDecimal.ZERO);
         cofins.setOutrasOperacoes(cofinsOutr);
         imposto.setCofins(cofins);
