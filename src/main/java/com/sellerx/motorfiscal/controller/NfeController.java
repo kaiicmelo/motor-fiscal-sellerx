@@ -112,7 +112,7 @@ public class NfeController {
                 NFIndicadorPresencaComprador.valueOfCodigo(
                     String.valueOf(invoice.getOrDefault("indicador_presenca", "2"))));
             ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.9");
+            ide.setVersaoEmissor("1.1.10");
             info.setIdentificacao(ide);
 
             // ---- Emitente ----
@@ -269,6 +269,6 @@ public class NfeController {
 
     @GetMapping("/process")
     public ResponseEntity<?> ping() {
-        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.9"));
+        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.10"));
     }
 }
