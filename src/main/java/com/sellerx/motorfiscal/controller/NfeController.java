@@ -268,7 +268,6 @@ public class NfeController {
                 NFNotaInfoItemImpostoICMSSN101 sn = new NFNotaInfoItemImpostoICMSSN101();
                 sn.setOrigem(origem);
                 sn.setValorCreditoICMSSN(BigDecimal.ZERO);
-                sn.setAliquotaAplicavelCalculoCreditoSN(BigDecimal.ZERO);
                 icms.setIcmssn101(sn);
                 break;
             }
@@ -278,8 +277,6 @@ public class NfeController {
             case "400": {
                 NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
                 sn.setOrigem(origem);
-                // Para SN102/103/300/400 a Fincatto NÃO exige setSituacaoOperacaoSN —
-                // a classe já é específica para esses códigos
                 icms.setIcmssn102(sn);
                 break;
             }
@@ -288,10 +285,8 @@ public class NfeController {
                 sn.setOrigem(origem);
                 sn.setModalidadeBCICMSST(NFNotaInfoItemModalidadeBCICMSST.LISTA_NEGATIVA);
                 sn.setValorBCICMSST(BigDecimal.ZERO);
-                sn.setAliquotaImpostoICMSST(BigDecimal.ZERO);
                 sn.setValorICMSST(BigDecimal.ZERO);
                 sn.setValorCreditoICMSSN(BigDecimal.ZERO);
-                sn.setAliquotaAplicavelCalculoCreditoSN(BigDecimal.ZERO);
                 icms.setIcmssn201(sn);
                 break;
             }
@@ -301,7 +296,6 @@ public class NfeController {
                 sn.setOrigem(origem);
                 sn.setModalidadeBCICMSST(NFNotaInfoItemModalidadeBCICMSST.LISTA_NEGATIVA);
                 sn.setValorBCICMSST(BigDecimal.ZERO);
-                sn.setAliquotaImpostoICMSST(BigDecimal.ZERO);
                 sn.setValorICMSST(BigDecimal.ZERO);
                 icms.setIcmssn202(sn);
                 break;
@@ -317,13 +311,11 @@ public class NfeController {
                 sn.setOrigem(origem);
                 sn.setModalidadeBCICMS(NFNotaInfoItemModalidadeBCICMS.VALOR_OPERACAO);
                 sn.setValorBCICMS(BigDecimal.ZERO);
-                sn.setAliquotaICMS(BigDecimal.ZERO);
                 sn.setValorICMS(BigDecimal.ZERO);
                 icms.setIcmssn900(sn);
                 break;
             }
             default: {
-                // Fallback: trata como SN102 (mais comum no Simples Nacional)
                 NFNotaInfoItemImpostoICMSSN102 sn = new NFNotaInfoItemImpostoICMSSN102();
                 sn.setOrigem(origem);
                 icms.setIcmssn102(sn);
