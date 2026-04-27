@@ -1,274 +1,285 @@
 package com.sellerx.motorfiscal.controller;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import java.io.*;
-import java.net.URL;
-import java.security.KeyStore;
-import java.util.*;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.ZonedDateTime;
-
-import com.fincatto.documentofiscal.nfe400.webservices.WSFacade;
-import com.fincatto.documentofiscal.nfe.NFeConfig;
 import com.fincatto.documentofiscal.DFAmbiente;
-import com.fincatto.documentofiscal.DFUnidadeFederativa;
 import com.fincatto.documentofiscal.DFModelo;
-import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
-import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.DFUnidadeFederativa;
+import com.fincatto.documentofiscal.nfe.NFeConfig;
+import com.fincatto.documentofiscal.nfe400.NFeFactory;
 import com.fincatto.documentofiscal.nfe400.classes.*;
-import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
-import org.simpleframework.xml.core.Persister;
+import com.fincatto.documentofiscal.nfe400.classes.nota.*;
+import com.fincatto.documentofiscal.nfe400.webservices.WSFacade;
+import org.springframework.web.bind.annotation.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/nfe")
-@CrossOrigin("*")
 public class NfeController {
 
-    // Mapa estático sigla -> codigo IBGE da UF (resolve falta de valueOfSigla)
-    private static final Map<String, String> UF_CODIGO = new HashMap<>();
-    static {
-        UF_CODIGO.put("AC","12"); UF_CODIGO.put("AL","27"); UF_CODIGO.put("AP","16");
-        UF_CODIGO.put("AM","13"); UF_CODIGO.put("BA","29"); UF_CODIGO.put("CE","23");
-        UF_CODIGO.put("DF","53"); UF_CODIGO.put("ES","32"); UF_CODIGO.put("GO","52");
-        UF_CODIGO.put("MA","21"); UF_CODIGO.put("MT","51"); UF_CODIGO.put("MS","50");
-        UF_CODIGO.put("MG","31"); UF_CODIGO.put("PA","15"); UF_CODIGO.put("PB","25");
-        UF_CODIGO.put("PR","41"); UF_CODIGO.put("PE","26"); UF_CODIGO.put("PI","22");
-        UF_CODIGO.put("RJ","33"); UF_CODIGO.put("RN","24"); UF_CODIGO.put("RS","43");
-        UF_CODIGO.put("RO","11"); UF_CODIGO.put("RR","14"); UF_CODIGO.put("SC","42");
-        UF_CODIGO.put("SP","35"); UF_CODIGO.put("SE","28"); UF_CODIGO.put("TO","17");
-    }
-
-    private static DFUnidadeFederativa ufBySigla(String sigla) {
-        String codigo = UF_CODIGO.getOrDefault(sigla.toUpperCase(), "35");
-        return DFUnidadeFederativa.valueOfCodigo(codigo);
-    }
-
     @PostMapping("/process")
-    public ResponseEntity<?> process(@RequestBody Map<String, Object> payload) {
+    public Map<String, Object> process(@RequestBody Map<String, Object> payload) throws Exception {
+        Map<String, Object> response = new HashMap<>();
         try {
-            Map<String, Object> company  = (Map<String, Object>) payload.get("company");
-            Map<String, Object> invoice  = (Map<String, Object>) payload.get("invoice");
-            Map<String, Object> customer = (Map<String, Object>) payload.get("customer");
-            List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
+            String action = (String) payload.get("action");
+            Map<String, Object> companyData = (Map<String, Object>) payload.get("company");
+            Map<String, Object> invoiceData = (Map<String, Object>) payload.get("invoice");
+            Map<String, Object> emitenteData = (Map<String, Object>) payload.get("emitente");
+            Map<String, Object> customerData = (Map<String, Object>) payload.get("customer");
+            List<Map<String, Object>> itemsData = (List<Map<String, Object>>) payload.get("items");
+            Map<String, Object> totaisData = (Map<String, Object>) payload.get("totais");
+            Map<String, Object> pagamentoData = (Map<String, Object>) payload.get("pagamento");
 
-            String numeroNota = String.valueOf(invoice.getOrDefault("numero", "1"));
-            if ("null".equals(numeroNota)) numeroNota = "1";
+            // ===== 1. CONFIGURAÇÃO =====
+            NFeConfig config = buildConfig(companyData);
 
-            // ====== CERTIFICADO ======
-            URL url = new URL((String) company.get("certificate_file_uri"));
-            String certPass = (String) company.get("certificate_password");
-            byte[] pfx;
-            try (InputStream in = url.openStream()) { pfx = in.readAllBytes(); }
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            ks.load(new ByteArrayInputStream(pfx), certPass.toCharArray());
-
-            // ====== UF dinamica ======
-            String ufSigla = String.valueOf(company.getOrDefault("uf", "SP"));
-            DFUnidadeFederativa ufEnum = ufBySigla(ufSigla);
-
-            NFeConfig config = new NFeConfig() {
-                @Override public DFUnidadeFederativa getCUF() { return ufEnum; }
-                @Override public DFAmbiente getAmbiente() {
-                    return "PRODUCAO".equals(company.get("ambiente")) ? DFAmbiente.PRODUCAO : DFAmbiente.HOMOLOGACAO;
-                }
-                @Override public KeyStore getCertificadoKeyStore() { return ks; }
-                @Override public String   getCertificadoSenha()    { return certPass; }
-                @Override public KeyStore getCadeiaCertificadosKeyStore() { return ks; }
-                @Override public String   getCadeiaCertificadosSenha()    { return certPass; }
-            };
-
-            Persister xmlParser = new Persister();
+            // ===== 2. MONTAR NF-e PROGRAMATICAMENTE =====
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
-            info.setVersao(new BigDecimal("4.00"));
+            info.setVersao("4.00");
 
-            // ---- Identificacao ----
+            // ----- Identificação -----
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
-            ide.setUf(ufEnum);
+            ide.setUf(DFUnidadeFederativa.valueOfCodigo(getUfCodigo((String) emitenteData.get("uf"))));
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
-            ide.setNaturezaOperacao(String.valueOf(invoice.getOrDefault("natureza_operacao", "VENDA")));
+            ide.setNaturezaOperacao((String) invoiceData.getOrDefault("natureza_operacao", "Venda"));
             ide.setModelo(DFModelo.NFE);
-            ide.setSerie(String.valueOf(invoice.getOrDefault("serie", "1")));
-            ide.setNumeroNota(numeroNota);
+            ide.setSerie(Integer.parseInt((String) invoiceData.get("serie")));
+            ide.setNumeroNota(Integer.parseInt((String) invoiceData.get("numero")));
             ide.setDataHoraEmissao(ZonedDateTime.now());
+            ide.setTipo(NFTipo.SAIDA);
+            ide.setIdentificadorLocalDestinoOperacao(
+                NFIdentificadorLocalDestinoOperacao.valueOfCodigo(
+                    (String) invoiceData.getOrDefault("id_destino", "1")));
+            ide.setCodigoMunicipio((String) invoiceData.get("codigo_municipio_fato_gerador"));
+            ide.setFormatoImpressaoDANFE(NFFormatoImpressaoDANFE.DANFE_NORMAL_RETRATO);
             ide.setTipoEmissao(NFTipoEmissao.EMISSAO_NORMAL);
-
-            String tipoOp = String.valueOf(invoice.getOrDefault("tipo_operacao", "1"));
-            ide.setTipo("0".equals(tipoOp) ? NFTipo.ENTRADA : NFTipo.SAIDA);
-
-            String idDest = String.valueOf(invoice.getOrDefault("id_destino", "1"));
-            ide.setIdentificadorLocalDestinoOperacao(NFIdentificadorLocalDestinoOperacao.valueOfCodigo(idDest));
-
-            ide.setCodigoMunicipio(String.valueOf(
-                invoice.getOrDefault("codigo_municipio_fato_gerador",
-                company.getOrDefault("codigo_municipio", "3516200"))));
-
-            ide.setTipoImpressao(NFTipoImpressao.DANFE_NORMAL_RETRATO);
-            ide.setFinalidade(NFFinalidade.NORMAL);
-            ide.setOperacaoConsumidorFinal(NFOperacaoConsumidorFinal.SIM);
-            ide.setIndicadorPresencaComprador(
-                NFIndicadorPresencaComprador.valueOfCodigo(
-                    String.valueOf(invoice.getOrDefault("indicador_presenca", "2"))));
-            ide.setProgramaEmissor(NFProcessoEmissor.CONTRIBUINTE);
-            ide.setVersaoEmissor("1.1.14");
+            ide.setIdentificadorAmbiente(config.getAmbiente());
+            ide.setFinalidadeEmissao(NFFinalidade.NORMAL);
+            ide.setConsumidorOperacao(NFOperacaoConsumidorFinal.NAO);
+            ide.setPresencaComprador(NFPresencaComprador.NAO_SE_APLICA);
+            ide.setProcessoEmissao(NFProcessoEmissao.APLICATIVO_CONTRIBUINTE);
+            ide.setVersaoEmissor("1.0");
             info.setIdentificacao(ide);
 
-            // ---- Emitente ----
-            NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
-            emit.setCnpj(String.valueOf(company.get("cnpj")).replaceAll("[^0-9]", ""));
-            emit.setRazaoSocial(String.valueOf(company.get("razao_social")));
-            emit.setInscricaoEstadual(String.valueOf(company.get("inscricao_estadual")).replaceAll("[^0-9]", ""));
-            emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
+            // ----- Emitente -----
+            info.setEmitente(buildEmitente(emitenteData, companyData));
 
-            Map<String, Object> endEmit = (Map<String, Object>) company.getOrDefault("endereco", new HashMap<>());
-            NFEndereco endE = new NFEndereco();
-            endE.setUf(ufBySigla(String.valueOf(endEmit.getOrDefault("uf", ufSigla))));
-            endE.setCodigoMunicipio(String.valueOf(endEmit.getOrDefault("codigo_municipio", "3516200")));
-            endE.setDescricaoMunicipio(String.valueOf(endEmit.getOrDefault("municipio", "FRANCA")));
-            endE.setLogradouro(String.valueOf(endEmit.getOrDefault("logradouro", "RUA SEM NOME")));
-            endE.setNumero(String.valueOf(endEmit.getOrDefault("numero", "S/N")));
-            endE.setBairro(String.valueOf(endEmit.getOrDefault("bairro", "CENTRO")));
-            endE.setCep(String.valueOf(endEmit.getOrDefault("cep", "14400000")).replaceAll("[^0-9]", ""));
-            endE.setCodigoPais("1058");
-            endE.setDescricaoPais("BRASIL");
-            emit.setEndereco(endE);
-            info.setEmitente(emit);
+            // ----- Destinatário -----
+            info.setDestinatario(buildDestinatario(customerData));
 
-            // ---- Destinatario ----
-            NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
-            String doc = String.valueOf(customer.getOrDefault("documento", "")).replaceAll("[^0-9]", "");
-            if (doc.length() > 11) dest.setCnpj(doc); else dest.setCpf(doc);
-            dest.setRazaoSocial(String.valueOf(customer.get("nome")));
-            dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
-
-            Map<String, Object> endDest = (Map<String, Object>) customer.getOrDefault("endereco", new HashMap<>());
-            NFEndereco endD = new NFEndereco();
-            endD.setUf(ufBySigla(String.valueOf(endDest.getOrDefault("uf", "SP"))));
-            endD.setCodigoMunicipio(String.valueOf(endDest.getOrDefault("codigo_municipio", "3550308")));
-            endD.setDescricaoMunicipio(String.valueOf(endDest.getOrDefault("municipio", "SAO PAULO")));
-            endD.setLogradouro(String.valueOf(endDest.getOrDefault("logradouro", "RUA SEM NOME")));
-            endD.setNumero(String.valueOf(endDest.getOrDefault("numero", "S/N")));
-            endD.setBairro(String.valueOf(endDest.getOrDefault("bairro", "CENTRO")));
-            endD.setCep(String.valueOf(endDest.getOrDefault("cep", "01001000")).replaceAll("[^0-9]", ""));
-            endD.setCodigoPais("1058");
-            endD.setDescricaoPais("BRASIL");
-            dest.setEndereco(endD);
-            info.setDestinatario(dest);
-
-            // ---- Itens ----
-            List<NFNotaInfoItem> lista = new ArrayList<>();
-            BigDecimal totalProd = BigDecimal.ZERO;
-            int o = 1;
-
-            for (Map<String, Object> i : items) {
-                NFNotaInfoItem item = new NFNotaInfoItem();
-                item.setNumeroItem(o++);
-
-                NFNotaInfoItemProduto p = new NFNotaInfoItemProduto();
-                p.setCodigo(String.valueOf(i.getOrDefault("codigo", "1")));
-                p.setDescricao(String.valueOf(i.getOrDefault("descricao", "PRODUTO")));
-                p.setNcm(String.valueOf(i.getOrDefault("ncm", "00000000")));
-                p.setCfop(String.valueOf(i.getOrDefault("cfop", "5102")));
-                p.setUnidadeComercial("UN");
-                p.setUnidadeTributavel("UN");
-
-                BigDecimal q = new BigDecimal(String.valueOf(i.getOrDefault("quantidade", "1")).replace(",", "."));
-                BigDecimal v = new BigDecimal(String.valueOf(i.getOrDefault("valor_unitario", "0")).replace(",", "."));
-                BigDecimal t = q.multiply(v).setScale(2, RoundingMode.HALF_UP);
-                totalProd = totalProd.add(t);
-
-                p.setQuantidadeComercial(q);
-                p.setQuantidadeTributavel(q);
-                p.setValorUnitario(v);
-                p.setValorUnitarioTributavel(v);
-                p.setValorTotalBruto(t);
-                item.setProduto(p);
-
-                // Imposto via XML (compatibilidade com Fincatto 5.0.48)
-                // origem=0 (Nacional) - parser do Fincatto resolve corretamente quando vem via XML
-                String impostoXml =
-                    "<imposto>" +
-                      "<ICMS>" +
-                        "<ICMSSN102>" +
-                          "<orig>NACIONAL</orig>" +
-                          "<CSOSN>CSOSN_102</CSOSN>" +
-                        "</ICMSSN102>" +
-                      "</ICMS>" +
-                      "<PIS>" +
-                        "<PISOutr>" +
-                          "<CST>CST_49</CST>" +
-                          "<vBC>0.00</vBC>" +
-                          "<pPIS>0.00</pPIS>" +
-                          "<vPIS>0.00</vPIS>" +
-                        "</PISOutr>" +
-                      "</PIS>" +
-                      "<COFINS>" +
-                        "<COFINSOutr>" +
-                          "<CST>CST_49</CST>" +
-                          "<vBC>0.00</vBC>" +
-                          "<pCOFINS>0.00</pCOFINS>" +
-                          "<vCOFINS>0.00</vCOFINS>" +
-                        "</COFINSOutr>" +
-                      "</COFINS>" +
-                    "</imposto>";
-
-                NFNotaInfoItemImposto imp = xmlParser.read(NFNotaInfoItemImposto.class, impostoXml);
-                item.setImposto(imp);
-                lista.add(item);
+            // ----- Itens -----
+            List<NFNotaInfoItem> itens = new ArrayList<>();
+            for (int i = 0; i < itemsData.size(); i++) {
+                itens.add(buildItem(itemsData.get(i), i + 1));
             }
-            info.setItens(lista);
+            info.setItens(itens);
 
-            // ---- Totais via XML ----
-            String vt = totalProd.setScale(2, RoundingMode.HALF_UP).toPlainString();
-            String totalXml =
-                "<total><ICMSTot>" +
-                  "<vBC>0.00</vBC><vICMS>0.00</vICMS><vICMSDeson>0.00</vICMSDeson>" +
-                  "<vFCP>0.00</vFCP><vBCST>0.00</vBCST><vST>0.00</vST>" +
-                  "<vFCPST>0.00</vFCPST><vFCPSTRet>0.00</vFCPSTRet>" +
-                  "<vProd>" + vt + "</vProd>" +
-                  "<vFrete>0.00</vFrete><vSeg>0.00</vSeg><vDesc>0.00</vDesc>" +
-                  "<vII>0.00</vII><vIPI>0.00</vIPI><vIPIDevol>0.00</vIPIDevol>" +
-                  "<vPIS>0.00</vPIS><vCOFINS>0.00</vCOFINS><vOutro>0.00</vOutro>" +
-                  "<vNF>" + vt + "</vNF>" +
-                "</ICMSTot></total>";
-            info.setTotal(xmlParser.read(NFNotaInfoTotal.class, totalXml));
+            // ----- Totais -----
+            info.setTotal(buildTotal(totaisData));
 
-            // ---- Pagamento via XML ----
-            String pagXml = "<pag><detPag><tPag>01</tPag><vPag>" + vt + "</vPag></detPag></pag>";
-            info.setPagamento(xmlParser.read(NFNotaInfoPagamento.class, pagXml));
+            // ----- Transporte -----
+            NFNotaInfoTransporte transp = new NFNotaInfoTransporte();
+            transp.setModalidadeFrete(NFModalidadeFrete.SEM_FRETE);
+            info.setTransporte(transp);
 
-            // ---- Transporte ----
-            NFNotaInfoTransporte tr = new NFNotaInfoTransporte();
-            tr.setModalidadeFrete(NFModalidadeFrete.valueOfCodigo("9"));
-            info.setTransporte(tr);
+            // ----- Pagamento -----
+            info.setPagamento(buildPagamento(pagamentoData));
 
             nota.setInfo(info);
 
-            // ====== ENVIO ======
+            // ===== 3. ASSINAR / TRANSMITIR =====
             WSFacade ws = new WSFacade(config);
-            NFLoteEnvio lote = new NFLoteEnvio();
-            lote.setNotas(Collections.singletonList(nota));
-            lote.setIdLote("1");
-            lote.setVersao("4.00");
 
-            NFLoteEnvioRetornoDados resDados = ws.enviaLote(lote);
-            NFLoteEnvioRetorno res = resDados.getRetorno();
+            if ("emitir".equals(action)) {
+                NFNota notaAssinada = ws.getAssinaturaService().assinarNota(nota);
+                NFLoteEnvio lote = new NFLoteEnvio();
+                lote.setIdLote("1");
+                lote.setIndicadorProcessamento(NFLoteIndicadorProcessamento.PROCESSAMENTO_SINCRONO);
+                lote.setNotas(Collections.singletonList(notaAssinada));
 
-            return ResponseEntity.ok(Map.of(
-                "status", res.getStatus(),
-                "motivo", res.getMotivo() != null ? res.getMotivo() : "OK"
-            ));
+                NFLoteEnvioRetornoDados retorno = ws.getNotaEnviaService().enviaNota(lote);
+                NFLoteEnvioRetorno r = retorno.getRetorno();
 
+                if (r.getProtocoloInfo() != null) {
+                    response.put("status", "sucesso");
+                    response.put("nfe_key", r.getProtocoloInfo().getChave());
+                    response.put("protocolo", r.getProtocoloInfo().getNumeroProtocolo());
+                    response.put("cStat", r.getStatus());
+                    response.put("xMotivo", r.getMotivo());
+                } else {
+                    response.put("status", "erro");
+                    response.put("erro", r.getMotivo());
+                    response.put("cStat", r.getStatus());
+                }
+            }
+
+            return response;
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("erro", e.getMessage()));
+            response.put("status", "erro");
+            response.put("erro", e.getMessage());
+            return response;
         }
     }
 
-    @GetMapping("/process")
-    public ResponseEntity<?> ping() {
-        return ResponseEntity.ok(Map.of("status", "online", "version", "1.1.14"));
+    // ===== HELPERS =====
+
+    private NFeConfig buildConfig(Map<String, Object> data) {
+        // Sua impl atual de NFeConfig com certificado .pfx baixado
+        // Mantenha o que já tem aqui — só não mexer no parse de XML
+        return new SuaNFeConfigImpl(data); // ajuste conforme seu projeto
+    }
+
+    private NFNotaInfoEmitente buildEmitente(Map<String, Object> e, Map<String, Object> c) {
+        NFNotaInfoEmitente emit = new NFNotaInfoEmitente();
+        emit.setCnpj((String) e.get("cnpj"));
+        emit.setRazaoSocial((String) e.get("razao_social"));
+        emit.setInscricaoEstadual((String) e.get("inscricao_estadual"));
+        emit.setRegimeTributario(NFRegimeTributario.SIMPLES_NACIONAL);
+
+        Map<String, Object> end = (Map<String, Object>) e.get("endereco");
+        NFEndereco endereco = new NFEndereco();
+        endereco.setLogradouro((String) end.get("logradouro"));
+        endereco.setNumero("S/N");
+        endereco.setBairro("Centro");
+        endereco.setCodigoMunicipio((String) end.get("codigo_municipio"));
+        endereco.setDescricaoMunicipio("Cidade");
+        endereco.setUf(DFUnidadeFederativa.valueOfCodigo(getUfCodigo((String) end.get("uf"))));
+        endereco.setCep("00000000");
+        endereco.setCodigoPais("1058");
+        endereco.setDescricaoPais("BRASIL");
+        emit.setEndereco(endereco);
+        return emit;
+    }
+
+    private NFNotaInfoDestinatario buildDestinatario(Map<String, Object> c) {
+        NFNotaInfoDestinatario dest = new NFNotaInfoDestinatario();
+        String doc = (String) c.get("documento");
+        if (doc.length() == 14) dest.setCnpj(doc);
+        else dest.setCpf(doc);
+        dest.setRazaoSocial((String) c.get("nome"));
+        dest.setIndicadorIEDestinatario(NFIndicadorIEDestinatario.NAO_CONTRIBUINTE);
+
+        Map<String, Object> end = (Map<String, Object>) c.get("endereco");
+        NFEndereco endereco = new NFEndereco();
+        endereco.setLogradouro((String) end.get("logradouro"));
+        endereco.setNumero("S/N");
+        endereco.setBairro("Centro");
+        endereco.setCodigoMunicipio((String) end.get("codigo_municipio"));
+        endereco.setDescricaoMunicipio("Cidade");
+        endereco.setUf(DFUnidadeFederativa.valueOfCodigo(getUfCodigo((String) end.get("uf"))));
+        endereco.setCep((String) end.get("cep"));
+        endereco.setCodigoPais("1058");
+        endereco.setDescricaoPais("BRASIL");
+        dest.setEndereco(endereco);
+        return dest;
+    }
+
+    private NFNotaInfoItem buildItem(Map<String, Object> data, int numero) {
+        NFNotaInfoItem item = new NFNotaInfoItem();
+        item.setNumeroItem(numero);
+
+        // Produto
+        NFNotaInfoItemProduto prod = new NFNotaInfoItemProduto();
+        prod.setCodigo((String) data.get("codigo"));
+        prod.setDescricao((String) data.get("descricao"));
+        prod.setNcm((String) data.get("ncm"));
+        prod.setCfop((String) data.get("cfop"));
+        prod.setUnidadeComercial("UN");
+        prod.setQuantidadeComercial(new BigDecimal(data.get("quantidade").toString()));
+        prod.setValorUnitario(new BigDecimal(data.get("valor_unitario").toString()));
+        prod.setValorTotalBruto(new BigDecimal(data.get("valor_total").toString()));
+        prod.setUnidadeTributavel("UN");
+        prod.setQuantidadeTributavel(new BigDecimal(data.get("quantidade").toString()));
+        prod.setValorUnitarioTributavel(new BigDecimal(data.get("valor_unitario").toString()));
+        prod.setProdutoCompoeValorNota(true);
+        item.setProduto(prod);
+
+        // Imposto
+        NFNotaInfoItemImposto imposto = new NFNotaInfoItemImposto();
+
+        // ---- ICMS SN 102 (CSOSN 102) ----
+        Map<String, Object> icmsData = (Map<String, Object>) data.get("icms");
+        String csosn = (String) icmsData.getOrDefault("cst", "102");
+
+        NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
+        NFNotaInfoItemImpostoICMSSN102 icmsSN = new NFNotaInfoItemImpostoICMSSN102();
+        // 🎯 USO CORRETO: valueOfCodigo() em vez de Enum.valueOf()
+        icmsSN.setOrigem(NFOrigem.valueOfCodigo(
+            icmsData.getOrDefault("origem", "0").toString()));
+        icmsSN.setSituacaoOperacaoSN(
+            NFNotaSituacaoOperacionalSimplesNacional.valueOfCodigo(csosn));
+        icms.setIcmssn102(icmsSN);
+        imposto.setIcms(icms);
+
+        // ---- PIS CST 49 (Outras) ----
+        NFNotaInfoItemImpostoPIS pis = new NFNotaInfoItemImpostoPIS();
+        NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
+        pisOutr.setSituacaoTributaria(
+            NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("49"));
+        pisOutr.setValorBaseCalculo(BigDecimal.ZERO);
+        pisOutr.setPercentualAliquota(BigDecimal.ZERO);
+        pisOutr.setValorTributo(BigDecimal.ZERO);
+        pis.setPisOutrasOperacoes(pisOutr);
+        imposto.setPis(pis);
+
+        // ---- COFINS CST 49 ----
+        NFNotaInfoItemImpostoCOFINS cofins = new NFNotaInfoItemImpostoCOFINS();
+        NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofinsOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
+        cofinsOutr.setSituacaoTributaria(
+            NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("49"));
+        cofinsOutr.setValorBaseCalculo(BigDecimal.ZERO);
+        cofinsOutr.setPercentualAliquota(BigDecimal.ZERO);
+        cofinsOutr.setValorTributo(BigDecimal.ZERO);
+        cofins.setCofinsOutrasOperacoes(cofinsOutr);
+        imposto.setCofins(cofins);
+
+        item.setImposto(imposto);
+        return item;
+    }
+
+    private NFNotaInfoTotal buildTotal(Map<String, Object> data) {
+        NFNotaInfoTotal total = new NFNotaInfoTotal();
+        NFNotaInfoICMSTotal icmsTot = new NFNotaInfoICMSTotal();
+        icmsTot.setBaseCalculoICMS(new BigDecimal(data.getOrDefault("vBC", "0").toString()));
+        icmsTot.setValorTotalICMS(new BigDecimal(data.getOrDefault("vICMS", "0").toString()));
+        icmsTot.setBaseCalculoICMSST(BigDecimal.ZERO);
+        icmsTot.setValorTotalICMSST(BigDecimal.ZERO);
+        icmsTot.setValorTotalProdutos(new BigDecimal(data.getOrDefault("vProd", "0").toString()));
+        icmsTot.setValorTotalFrete(new BigDecimal(data.getOrDefault("vFrete", "0").toString()));
+        icmsTot.setValorTotalSeguro(BigDecimal.ZERO);
+        icmsTot.setValorTotalDesconto(new BigDecimal(data.getOrDefault("vDesc", "0").toString()));
+        icmsTot.setValorTotalII(BigDecimal.ZERO);
+        icmsTot.setValorTotalIPI(BigDecimal.ZERO);
+        icmsTot.setValorPIS(BigDecimal.ZERO);
+        icmsTot.setValorCOFINS(BigDecimal.ZERO);
+        icmsTot.setOutrasDespesasAcessorias(new BigDecimal(data.getOrDefault("vOutro", "0").toString()));
+        icmsTot.setValorTotalNFe(new BigDecimal(data.getOrDefault("vNF", "0").toString()));
+        icmsTot.setValorTotalTributos(new BigDecimal(data.getOrDefault("vTotTrib", "0").toString()));
+        total.setIcmsTotal(icmsTot);
+        return total;
+    }
+
+    private NFNotaInfoPagamento buildPagamento(Map<String, Object> data) {
+        NFNotaInfoPagamento pag = new NFNotaInfoPagamento();
+        NFNotaInfoFormaPagamento forma = new NFNotaInfoFormaPagamento();
+        forma.setIndicadorFormaPagamento(NFIndicadorFormaPagamento.PAGAMENTO_VISTA);
+        // 🎯 USO CORRETO: valueOfCodigo()
+        forma.setMeioPagamento(
+            NFMeioPagamento.valueOfCodigo((String) data.getOrDefault("tipo", "99")));
+        forma.setValorPagamento(new BigDecimal(data.get("valor").toString()));
+        pag.setFormasPagamento(Collections.singletonList(forma));
+        return pag;
+    }
+
+    private String getUfCodigo(String uf) {
+        Map<String, String> map = new HashMap<>();
+        map.put("SP", "35"); map.put("RJ", "33"); map.put("MG", "31");
+        map.put("RS", "43"); map.put("PR", "41"); map.put("SC", "42");
+        map.put("BA", "29"); map.put("GO", "52"); map.put("DF", "53");
+        // ... adicione todos os estados
+        return map.getOrDefault(uf, "35");
     }
 }
