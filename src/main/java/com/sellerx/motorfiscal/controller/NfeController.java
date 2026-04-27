@@ -16,6 +16,7 @@ import com.fincatto.documentofiscal.DFModelo;
 import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.*;
+import com.fincatto.documentofiscal.nfe400.classes.NFSituacaoOperacaoSimplesNacional;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
 import org.simpleframework.xml.core.Persister;
 
