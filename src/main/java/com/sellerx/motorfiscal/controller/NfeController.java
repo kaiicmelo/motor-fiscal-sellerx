@@ -54,7 +54,7 @@ public class NfeController {
             ide.setCodigoRandomico(String.format("%08d", new Random().nextInt(99999999)));
             ide.setNaturezaOperacao((String) invoiceData.getOrDefault("natureza_operacao", "Venda"));
             ide.setModelo(DFModelo.NFE);
-            ide.setSerie(new BigDecimal((String) invoiceData.get("serie")));
+            ide.setSerie((String) invoiceData.get("serie"));
             ide.setNumeroNota(String.format("%09d", Integer.parseInt((String) invoiceData.get("numero"))));
             ide.setDataHoraEmissao(ZonedDateTime.now());
             ide.setTipo(NFTipo.SAIDA);
