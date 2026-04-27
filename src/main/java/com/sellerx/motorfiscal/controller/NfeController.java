@@ -17,7 +17,6 @@ import com.fincatto.documentofiscal.nfe.NFTipoEmissao;
 import com.fincatto.documentofiscal.nfe400.classes.nota.*;
 import com.fincatto.documentofiscal.nfe400.classes.*;
 import com.fincatto.documentofiscal.nfe400.classes.lote.envio.*;
-import com.fincatto.documentofiscal.nfe.classes.*; // CORREÇÃO VITAL: Pacote correto na versão 5.x+
 import org.simpleframework.xml.core.Persister;
 
 @RestController
@@ -110,16 +109,10 @@ public class NfeController {
                 p.setValorTotalBruto(t);
                 item.setProduto(p);
                 
-                NFNotaInfoItemImposto imp = new NFNotaInfoItemImposto();
-                NFNotaInfoItemImpostoICMS icms = new NFNotaInfoItemImpostoICMS();
-                NFNotaInfoItemImpostoICMSSN102 s102 = new NFNotaInfoItemImpostoICMSSN102();
-                
-                // Com o import "nfe.classes.*" as classes abaixo funcionam perfeitamente
-                s102.setOrigem(NFOrigem.NACIONAL); 
-                s102.setSituacaoOperacaoSN(NFNotaSituacaoOperacaoSimplesNacional.valueOfCodigo("102"));
-                
-                icms.setIcmssn102(s102); imp.setIcms(icms);
-                item.setImposto(imp); lista.add(item);
+                // MÁGICA: Bypassa totalmente a instanciacao das classes CSOSN injetando o XML direto
+                NFNotaInfoItemImposto imp = xmlParser.read(NFNotaInfoItemImposto.class, "<imposto><ICMS><ICMSSN102><orig>0</orig><CSOSN>102</CSOSN></ICMSSN102></ICMS></imposto>");
+                item.setImposto(imp); 
+                lista.add(item);
             }
             info.setItens(lista);
             String vt = totalProd.setScale(2, RoundingMode.HALF_UP).toPlainString();
