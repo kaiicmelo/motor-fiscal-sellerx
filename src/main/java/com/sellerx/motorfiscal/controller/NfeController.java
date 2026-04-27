@@ -45,7 +45,7 @@ public class NfeController {
 
             NFNota nota = new NFNota();
             NFNotaInfo info = new NFNotaInfo();
-            info.setVersao("4.00");
+            info.setVersao(new BigDecimal("4.00"));
 
             // IDENTIFICAÇÃO
             NFNotaInfoIdentificacao ide = new NFNotaInfoIdentificacao();
