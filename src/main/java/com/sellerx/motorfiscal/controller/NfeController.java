@@ -327,8 +327,7 @@ public class NfeController {
         NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
         pisOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("49"));
         pisOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        // Tente usar setPercentualAliquota para PIS, já que o compilador não reclamou dele neste último log
-        pisOutr.setPercentualAliquota(BigDecimal.ZERO); 
+        pisOutr.setPercentualAliquota(BigDecimal.ZERO);
         pisOutr.setValorTributo(BigDecimal.ZERO);
         pis.setOutrasOperacoes(pisOutr);
         imposto.setPis(pis);
@@ -337,8 +336,7 @@ public class NfeController {
         NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofinsOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
         cofinsOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("49"));
         cofinsOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        // CORREÇÃO CRÍTICA PARA O COFINS: A biblioteca Fincatto 4.0.32 usa setPercentualCOFINS para Outras Operações
-        cofinsOutr.setPercentualCOFINS(BigDecimal.ZERO); 
+        cofinsOutr.setPercentualAliquota(BigDecimal.ZERO);
         cofinsOutr.setValorCOFINS(BigDecimal.ZERO);
         cofins.setOutrasOperacoes(cofinsOutr);
         imposto.setCofins(cofins);
