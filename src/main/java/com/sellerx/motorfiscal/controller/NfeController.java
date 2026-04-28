@@ -323,11 +323,12 @@ public class NfeController {
         }
         imposto.setIcms(icms);
 
+        // AQUI ESTÁ A CORREÇÃO DEFINITIVA DA INCONSISTÊNCIA DA BIBLIOTECA FINCATTO
         NFNotaInfoItemImpostoPIS pis = new NFNotaInfoItemImpostoPIS();
         NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
         pisOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("49"));
         pisOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        pisOutr.setPercentualPIS(BigDecimal.ZERO); // CORRIGIDO PARA O MÉTODO CERTO
+        pisOutr.setPercentualAliquota(BigDecimal.ZERO); // FINCATTO USA 'Aliquota' PARA O PIS
         pisOutr.setValorTributo(BigDecimal.ZERO);
         pis.setOutrasOperacoes(pisOutr);
         imposto.setPis(pis);
@@ -336,7 +337,7 @@ public class NfeController {
         NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofinsOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
         cofinsOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("49"));
         cofinsOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        cofinsOutr.setPercentualCOFINS(BigDecimal.ZERO); // CORRIGIDO PARA O MÉTODO CERTO
+        cofinsOutr.setPercentualCOFINS(BigDecimal.ZERO); // FINCATTO USA 'COFINS' PARA O COFINS
         cofinsOutr.setValorCOFINS(BigDecimal.ZERO);
         cofins.setOutrasOperacoes(cofinsOutr);
         imposto.setCofins(cofins);
