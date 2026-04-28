@@ -327,7 +327,7 @@ public class NfeController {
         NFNotaInfoItemImpostoPISOutrasOperacoes pisOutr = new NFNotaInfoItemImpostoPISOutrasOperacoes();
         pisOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaPIS.valueOfCodigo("49"));
         pisOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        pisOutr.setPercentualAliquota(BigDecimal.ZERO); // CORRIGIDO: era setPercentualPIS
+        pisOutr.setPercentualAliquota(BigDecimal.ZERO);
         pisOutr.setValorTributo(BigDecimal.ZERO);
         pis.setOutrasOperacoes(pisOutr);
         imposto.setPis(pis);
@@ -336,7 +336,7 @@ public class NfeController {
         NFNotaInfoItemImpostoCOFINSOutrasOperacoes cofinsOutr = new NFNotaInfoItemImpostoCOFINSOutrasOperacoes();
         cofinsOutr.setSituacaoTributaria(NFNotaInfoSituacaoTributariaCOFINS.valueOfCodigo("49"));
         cofinsOutr.setValorBaseCalculo(BigDecimal.ZERO);
-        cofinsOutr.setPercentualAliquota(BigDecimal.ZERO); // CORRIGIDO: era setPercentualCOFINS
+        cofinsOutr.setPercentualAliquota(BigDecimal.ZERO);
         cofinsOutr.setValorCOFINS(BigDecimal.ZERO);
         cofins.setOutrasOperacoes(cofinsOutr);
         imposto.setCofins(cofins);
